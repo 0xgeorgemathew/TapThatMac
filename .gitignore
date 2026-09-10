@@ -1,0 +1,21 @@
+# SwiftPM and generated bundles
+.build/
+/.swiftpm/
+/dist/
+/DerivedData/
+
+# Local recordings, investigations and signing configuration
+/diagnostics/
+.env
+.env.*
+*.p12
+*.p8
+*.mobileprovision
+*.provisionprofile
+
+# Editor and OS state
+.DS_Store
+xcuserdata/
+*.xcuserstate
+.idea/
+.vscode/
