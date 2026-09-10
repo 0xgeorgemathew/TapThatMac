@@ -8,7 +8,7 @@ struct SetupView: View {
     @State private var label = "Desk double taps"
     @State private var expectedDoubleKnocks = 1
     @State private var purpose = "Calibration"
-    private let pages = ["Tuning", "Actions", "Recordings", "Advanced"]
+    private let pages = ["Permissions", "Tuning", "Actions", "Recordings", "Advanced"]
     private let labels = ["Desk double taps", "Chassis double knocks", "Left double taps", "Right double taps", "Light double taps", "Table shaking", "Moving objects", "Typing", "Quiet interval"]
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -28,6 +28,7 @@ struct SetupView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     switch page {
+                    case "Permissions": PermissionSetupView(model: model)
                     case "Actions": actions
                     case "Recordings": recordings
                     case "Advanced": advanced
@@ -51,6 +52,10 @@ struct SetupView: View {
         .frame(minWidth: 720, idealWidth: 760, minHeight: 640, idealHeight: 760)
         .background(Color(nsColor: .windowBackgroundColor))
         .background(SettingsWindowReader(model: model)).tint(.mint)
+        .onAppear {
+            model.refreshPermissions()
+            if !model.accessibilityPermission || !model.typingPermission { page = "Permissions" }
+        }
     }
     private var tuning: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -177,13 +182,7 @@ struct SetupView: View {
                 }
             }
             Divider()
-            Label(model.accessibilityPermission ? "Accessibility allowed" : "Accessibility required", systemImage: "hand.raised")
-            Button("Request Accessibility") { ActionExecutor.requestPermission() }
-            Label(model.typingPermission ? "Input Monitoring allowed" : "Typing suppression unavailable", systemImage: "keyboard")
-            HStack {
-                Button("Request Input Monitoring") { model.requestTypingPermission() }
-                Button("Refresh permissions") { model.refreshPermissions() }
-            }
+            Button("Manage permissions") { page = "Permissions" }
             Divider()
             HStack {
                 Button("Missed tap") { model.mark("Missed tap; \(model.preset.rawValue)") }

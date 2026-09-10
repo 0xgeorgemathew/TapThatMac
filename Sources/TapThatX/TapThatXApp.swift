@@ -28,7 +28,7 @@ private struct MenuBarIcon: View {
             .onAppear {
                 guard !launched else { return }
                 launched = true
-                if CommandLine.arguments.contains("--show-setup") {
+                if CommandLine.arguments.contains("--show-setup") || !ActionExecutor.trusted || !CGPreflightListenEventAccess() {
                     openWindow(id: "setup")
                     NSApp.activate(ignoringOtherApps: true)
                 }

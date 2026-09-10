@@ -22,6 +22,7 @@ stage="$dmg_temp_dir/stage"
 mkdir -p "$stage/.background"
 cp -R dist/TapThatX.app "$stage/TapThatX.app"
 ln -s /Applications "$stage/Applications"
+cp "Packaging/Start Here.txt" "$stage/Start Here.txt"
 
 if [[ -f Packaging/dmg/dmg_background.png ]]; then
   cp Packaging/dmg/dmg_background.png "$stage/.background/background.png"
@@ -62,6 +63,7 @@ tell application "Finder"
     end if
     set position of item "TapThatX.app" of container window to {180, 190}
     set position of item "Applications" of container window to {480, 190}
+    set position of item "Start Here.txt" of container window to {330, 310}
     close
     open
     update without registering applications

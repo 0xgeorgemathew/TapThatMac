@@ -31,7 +31,7 @@ See [Contributing](CONTRIBUTING.md) for the development loop and [distribution](
 
 ## Try the baseline
 
-Grant Accessibility and Input Monitoring when prompted on launch. Accessibility enables system actions; Input Monitoring enables suppression near typing. Direct sensor access is tried first; the signed helper may require approval in System Settings.
+The Permissions page opens on launch when access is missing and provides buttons for the relevant System Settings pages. Grant Accessibility and Input Monitoring when prompted on launch. Accessibility enables system actions; Input Monitoring enables suppression near typing. Direct sensor access is tried first; the signed helper may require approval in System Settings.
 
 1. Open **Setup & Diagnostics** and keep **800 Hz** for the current detection baseline.
 2. Watch the graph while tapping twice. Actions are paused while settings are visible.

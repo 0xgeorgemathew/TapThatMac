@@ -1,0 +1,23 @@
+TapThatX — first launch
+
+1. Drag TapThatX into Applications, then open it from there.
+2. If macOS blocks it as an unidentified developer, open System Settings >
+   Privacy & Security > Open Anyway and confirm.
+
+For a build received directly from someone you trust, you can instead run this
+in Terminal after copying the app:
+
+xattr -dr com.apple.quarantine "/Applications/TapThatX.app"
+open "/Applications/TapThatX.app"
+
+This removes only this app's download quarantine. It does not notarize the app,
+disable Gatekeeper globally, or grant Accessibility or Input Monitoring.
+
+3. TapThatX requests Accessibility and Input Monitoring at launch. Its Permissions
+   page explains each permission and opens the relevant settings. Enable TapThatX
+   manually in both lists. Quit and reopen if macOS asks you to.
+4. Return to TapThatX, select your action and choose Enable & close. Actions pause
+   while settings are open. Keep 800 Hz for the current on-Mac baseline.
+
+Ad-hoc builds require direct sensor access. The authenticated helper needs an
+Apple-signed build. Same-model Macs can still differ in OS and access settings.

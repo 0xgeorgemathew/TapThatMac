@@ -15,3 +15,7 @@ bash scripts/create-dmg.sh
 Notarization submits the app to Apple, staples and verifies it, and produces `dist/TapThatX.zip`. The separate DMG script packages the current bundle with a drag-to-Applications layout; it does not notarize the DMG itself. Keep credentials in the environment/keychain. No signing identity or credential is stored in this repository or CI.
 
 Before distribution, verify installation, permissions, helper lifecycle and physical detection on a second supported Mac. A successful build or replay does not establish those checks.
+
+## Sharing a development build
+
+Use `SIGNING_IDENTITY=- bash scripts/build-app.sh`, then `bash scripts/create-dmg.sh` for an ad-hoc build. The DMG includes `Start Here.txt` with installation, per-app quarantine removal and manual permission instructions. Accessibility and Input Monitoring still require approval in System Settings. Ad-hoc builds cannot use the authenticated sensor helper.
