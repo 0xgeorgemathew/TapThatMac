@@ -62,10 +62,7 @@ private struct MenuContents: View {
         Text(model.status)
         Text(model.actionBlockReason ?? "Actions enabled")
         Divider()
-        Picker("Preset", selection: $model.preset) { ForEach(Preset.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
-        if model.preset == .quickAction {
-            Picker("Quick action", selection: $model.quickAction) { Text("Lock Mac").tag(Command.lock); Text("Play / Pause").tag(Command.playPause) }
-        }
+        Text("Double-tap: \(model.doubleTapAction.rawValue)")
         Toggle("Pause recognition", isOn: $model.paused)
         Button("Open command ring") { DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { model.previewRing() } }
         Button("Save last 15 seconds") { model.saveRecentActivity() }

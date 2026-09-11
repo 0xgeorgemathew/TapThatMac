@@ -96,28 +96,25 @@ struct SetupView: View {
     }
     private var actions: some View {
         VStack(alignment: .leading, spacing: 20) {
-            heading("One gesture. One action.", "Double-taps respond on the second tap. Triple-tap bindings are removed.")
-            Picker("Double-tap behavior", selection: $model.preset) {
-                ForEach(Preset.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            heading("Double-tap action", "Choose one action, or open the ring to choose each time.")
+            Picker("Double-tap", selection: $model.doubleTapAction) {
+                ForEach(DoubleTapAction.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
-            if model.preset == .assistant {
-                Picker("ChatGPT action", selection: $model.assistantIntent) {
-                    ForEach(AssistantIntent.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                Text("Finds a matching control in the ChatGPT desktop app's current window, brings it forward, then activates it. Keep the pending prompt in that window. Browser support requires a focused chatgpt.com page.")
-                Text("A written “Approve / Reject” message is not a button. Missing or ambiguous controls do nothing. Single taps have no assistant action.")
+            if model.doubleTapAction == .ring {
+                Text("Double-tap opens all actions. Single tap moves clockwise; double-tap chooses the highlighted action.")
+                Text("Right / Down move clockwise. Left / Up move counterclockwise. All arrows wrap around. Return chooses; Escape cancels. You can also point and click.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Text("Single taps move after a short pause so a double-tap can choose without moving first.")
                     .font(.caption).foregroundStyle(.secondary)
+            } else if model.doubleTapAction == .lock {
+                Text("Lock and Play / Pause open the ring, move to the action, and show a press before executing. Escape cancels the animation. A lock confirmation appears when you unlock.")
+                    .foregroundStyle(.secondary)
+            }
+            if model.doubleTapAction.command?.assistantIntent != nil {
+                Label("ChatGPT controls · Experimental", systemImage: "sparkles")
+                Text("Requires a matching control in ChatGPT. Missing or ambiguous controls do nothing. Browser support requires a focused chatgpt.com page.")
+                    .font(.callout).foregroundStyle(.secondary)
                 Button("Check controls") { model.inspectAssistantControls() }
-            } else if model.preset == .doubleTapLock {
-                Label("Centered ring → Lock Mac", systemImage: "lock")
-                Text("Two taps open the ring and smoothly select Lock. Escape cancels during the transition.").foregroundStyle(.secondary)
-            } else if model.preset == .quickAction {
-                Picker("Action", selection: $model.quickAction) {
-                    Text("Lock Mac").tag(Command.lock); Text("Play / Pause").tag(Command.playPause)
-                }
-            } else {
-                Toggle("Navigate the ring with taps", isOn: $model.tapOnly)
-                Text("Single tap advances; double-tap chooses. Pointer, arrows, Return and Escape also work.").foregroundStyle(.secondary)
             }
             Divider()
             Toggle("Enable system actions", isOn: $model.actionsEnabled)

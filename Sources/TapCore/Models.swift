@@ -25,12 +25,31 @@ public enum Preset: String, CaseIterable, Codable {
 public enum Command: String, CaseIterable, Codable {
     // Clockwise from the top.
     case playPause = "Play / Pause", next = "Next Track", lock = "Lock Mac", previous = "Previous Track"
+    case approve = "ChatGPT: Approve once", reject = "ChatGPT: Reject", dictation = "ChatGPT: Dictation"
+    public var assistantIntent: AssistantIntent? {
+        switch self {
+        case .approve: return .accept
+        case .reject: return .reject
+        case .dictation: return .dictation
+        default: return nil
+        }
+    }
+    public static func advancing(_ selected: Command?, by step: Int) -> Command {
+        guard let selected, let index = allCases.firstIndex(of: selected) else {
+            return step < 0 ? allCases.last! : allCases[0]
+        }
+        let count = allCases.count
+        return allCases[((index + step) % count + count) % count]
+    }
     public var symbol: String {
         switch self {
         case .playPause: return "playpause.fill"
         case .next: return "forward.end.fill"
         case .lock: return "lock.fill"
         case .previous: return "backward.end.fill"
+        case .approve: return "checkmark"
+        case .reject: return "xmark"
+        case .dictation: return "mic.fill"
         }
     }
 }
@@ -60,4 +79,32 @@ public struct DetectorSettings: Codable {
         return min(7, 0.035 / min(0.07, max(0.005, value)))
     }
     public var amplitudeFloor: Double { 0.035 / max(0.5, min(7, sensitivity)) }
+}
+
+public enum DoubleTapAction: String, CaseIterable {
+    case ring = "Ring"
+    case lock = "Lock Mac"
+    case playPause = "Play / Pause"
+    case next = "Next Track"
+    case previous = "Previous Track"
+    case approve = "ChatGPT: Approve once"
+    case reject = "ChatGPT: Reject"
+    case dictation = "ChatGPT: Dictation"
+
+    public var command: Command? { Command(rawValue: rawValue) }
+
+    public static func restored(saved: String?, preset: String?, quickAction: String?, assistantIntent: String?) -> Self {
+        if let saved, let action = Self(rawValue: saved) { return action }
+        switch preset.flatMap(Preset.init(rawValue:)) {
+        case .commandRing: return .ring
+        case .quickAction: return quickAction.flatMap(Self.init(rawValue:)) ?? .lock
+        case .assistant:
+            switch assistantIntent.flatMap(AssistantIntent.init(rawValue:)) {
+            case .reject: return .reject
+            case .dictation: return .dictation
+            default: return .approve
+            }
+        default: return .lock
+        }
+    }
 }

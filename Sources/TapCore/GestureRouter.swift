@@ -19,6 +19,12 @@ public struct GestureRouter {
     public mutating func reset() { state = .idle }
     public mutating func consumeOpening(at time: Double) { state = .cooldown(until: time + recoveryInterval) }
 
+    /// Do not expire a pair while an onset can still be awaiting pulse confirmation
+    /// or delivery. The detector confirms within 35 ms; retain a 40 ms margin.
+    public mutating func advance(wallTime: Double, processedSensorTime: Double) -> GestureEvent? {
+        advance(to: min(wallTime, processedSensorTime) - 0.04)
+    }
+
     public mutating func advance(to time: Double) -> GestureEvent? {
         switch state {
         case .firstKnockPending(let first) where time - first > maximumInterval:

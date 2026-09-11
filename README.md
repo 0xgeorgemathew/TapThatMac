@@ -4,7 +4,11 @@
 
 A native macOS menu bar app that turns deliberate double taps and knocks into actions. Built with Swift, SwiftUI and AppKit; no third-party package dependencies.
 
-The current on-Mac detection is the working POC baseline. Command Ring supports repeated open/dismiss gestures, pointer and keyboard selection. Double-tap Lock opens the centered ring and selects Lock Mac. ChatGPT controls and tap-only ring navigation are experimental. Triple-tap recognition is disabled in production.
+The current on-Mac detection is the working POC baseline. Set one **Double-tap action** in Actions: Ring, Lock Mac, media controls, or an experimental ChatGPT control. Existing lock, quick-action and assistant preferences migrate automatically. Triple-tap recognition is disabled in production.
+
+Ring reveals every action. A single tap advances clockwise after the 450 ms double-tap window; a double-tap chooses the highlighted action without advancing first. Right/Down and Left/Up cycle in opposite directions and wrap around. Return chooses, Escape cancels, and pointer selection works too. The ring starts with Play / Pause selected. Preview responds to the same gestures while actions remain paused. Direct Lock Mac and Play / Pause show the ring, swing the highlight to the command, and animate a press before executing (about 620 ms total). Choosing an action in the open ring shows a 220 ms press before execution. Escape or losing focus cancels the pending action. Trackpad haptic feedback acknowledges the request on supported hardware; a confirmation appears after unlocking when macOS confirmed the lock. macOS may cover the ring as soon as the screen locks.
+
+The ring uses the same glassy, blurred AppKit material on every supported macOS version, including macOS 15. Reduce Motion and Reduce Transparency are respected.
 
 ## Develop
 
@@ -35,7 +39,7 @@ The Permissions page opens on launch when access is missing and provides buttons
 
 1. Open **Setup & Diagnostics** and keep **800 Hz** for the current detection baseline.
 2. Watch the graph while tapping twice. Actions are paused while settings are visible.
-3. Select **Command Ring**, enable actions and close settings to try repeated open/dismiss/open gestures.
+3. In **Actions**, set **Double-tap → Ring**, enable actions and close settings. Double-tap to open, tap to move, and double-tap to choose.
 4. After a missed interaction, immediately choose **Save last 15 seconds** from the menu.
 
 The recent export includes bounded XYZ samples, key timestamps and diagnostic events. It saves locally under `~/Library/Application Support/TapThatX/`; it contains no typed characters or microphone recording and is never uploaded. Unsaved context is lost on quit. Calibration recordings also disable actions while recording. Simulated input always uses dry-run actions.

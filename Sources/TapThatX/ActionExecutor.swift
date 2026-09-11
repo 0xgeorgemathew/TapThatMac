@@ -9,6 +9,7 @@ struct ActionExecutor {
         _ = AXIsProcessTrustedWithOptions(options)
     }
     func execute(_ command: Command, enabled: Bool) -> String {
+        guard command.assistantIntent == nil else { return "Not sent: ChatGPT requires assistant controls" }
         guard enabled else { return "Dry run: \(command.rawValue)" }
         guard Self.trusted else { return "Not sent: Accessibility permission is required" }
         if command == .lock {
@@ -18,6 +19,7 @@ struct ActionExecutor {
             }
             down.flags = [.maskControl, .maskCommand]; up.flags = [.maskControl, .maskCommand]
             down.post(tap: .cghidEventTap)
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
             // Give the system shortcut handler a normal key press duration.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { up.post(tap: .cghidEventTap) }
             return "Lock shortcut sent — waiting for macOS lock confirmation"

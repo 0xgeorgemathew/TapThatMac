@@ -87,7 +87,6 @@ private struct PulseDetector {
               sample.time - lastImpact >= 0.09 else { return false }
         // Confirm a short pulse on its falling edge, then require quiet before
         // rearming. A threshold crossing alone accepts shaking and ring echoes.
-        latched = true; lastImpact = sample.time
         // Slow swells from moving objects can have short threshold crossings.
         // Require a sharp onset as well as a short pulse.
         guard riseRate >= (lightTapMode ? 3.0 : 1.0) else {
@@ -95,6 +94,9 @@ private struct PulseDetector {
             return false
         }
         if settings.suppressTyping, let key = lastKeyTime, sample.time - key < 0.18 { return false }
+        // Rejected slow crossings must not disarm a sharper contact that follows
+        // while the computer is still moving. Only a candidate starts rearming.
+        latched = true; lastImpact = sample.time
         candidateTime = sample.time; candidateThreshold = threshold; candidatePeak = feature; candidateRiseRate = riseRate
         return false
     }

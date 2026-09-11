@@ -6,17 +6,21 @@ import TapCore
 enum InputMode: String, CaseIterable { case sensor = "Direct sensor", helper = "Sensor helper", simulated = "Simulated input" }
 
 final class AppModel: ObservableObject {
-    @Published var preset: Preset = Preset(rawValue: UserDefaults.standard.string(forKey: "preset") ?? "") ?? .doubleTapLock { didSet {
-        UserDefaults.standard.set(preset.rawValue, forKey: "preset")
-        router = GestureRouter()
+    @Published var doubleTapAction = DoubleTapAction.restored(
+        saved: UserDefaults.standard.string(forKey: "doubleTapAction"),
+        preset: UserDefaults.standard.string(forKey: "preset"),
+        quickAction: UserDefaults.standard.string(forKey: "quickAction"),
+        assistantIntent: UserDefaults.standard.string(forKey: "assistantIntent")
+    ) { didSet {
+        UserDefaults.standard.set(doubleTapAction.rawValue, forKey: "doubleTapAction")
         resetInteraction(resetDetector: false); logSettings()
     } }
-    @Published var assistantIntent: AssistantIntent = AssistantIntent(rawValue: UserDefaults.standard.string(forKey: "assistantIntent") ?? "") ?? .accept { didSet {
-        UserDefaults.standard.set(assistantIntent.rawValue, forKey: "assistantIntent"); resetInteraction(resetDetector: false)
-    } }
-    @Published var quickAction: Command = Command(rawValue: UserDefaults.standard.string(forKey: "quickAction") ?? "") ?? .lock { didSet {
-        UserDefaults.standard.set(quickAction.rawValue, forKey: "quickAction"); resetInteraction(resetDetector: false); logSettings()
-    } }
+    // Keep the existing diagnostic export format readable by older tools.
+    var preset: Preset {
+        if doubleTapAction == .ring { return .commandRing }
+        if doubleTapAction.command?.assistantIntent != nil { return .assistant }
+        return doubleTapAction == .lock ? .doubleTapLock : .quickAction
+    }
     @Published var input: InputMode = .sensor { didSet { restart() } }
     @Published var sampleRate: Int = {
         let args = CommandLine.arguments
@@ -29,7 +33,6 @@ final class AppModel: ObservableObject {
         return requested
     }() { didSet { UserDefaults.standard.set(sampleRate, forKey: "sampleRate"); restart(); logSettings() } }
     @Published var paused = false { didSet { restart() } }
-    @Published var tapOnly = false { didSet { resetInteraction(resetDetector: false); logSettings() } }
     @Published var sensitivity = 2.0 {
         didSet {
             UserDefaults.standard.set(sensitivity, forKey: "knockSensitivity")
@@ -41,7 +44,7 @@ final class AppModel: ObservableObject {
     @Published var actionsEnabled = !CommandLine.arguments.contains("--calibrate") { didSet { resetInteraction(resetDetector: false); logSettings() } }
     @Published var status = "Starting"
     @Published var helperStatus = HelperClient.status
-    @Published var acknowledgment = "Double-tap to open the centered ring and lock"
+    @Published var acknowledgment = "Choose your double-tap action in Actions"
     private(set) var sampleCount = 0
     private(set) var rate = 0.0
     private(set) var rejected = 0
@@ -100,6 +103,7 @@ final class AppModel: ObservableObject {
     private var waitingForHelperApproval = false
     private var applicationObservers: [NSObjectProtocol] = []
     private var awaitingLock = false
+    private var showLockReceiptOnReturn = false
     private var lockAttempt = 0
     private var now: Double { ProcessInfo.processInfo.systemUptime }
     var actionBlockReason: String? {
@@ -158,7 +162,7 @@ final class AppModel: ObservableObject {
         RunLoop.main.add(tickTimer, forMode: .common)
     }
     private func logSettings() {
-        diagnostics.log("settings", "preset=\(preset.rawValue); action=\(quickAction.rawValue); input=\(input.rawValue); sampleRate=\(sampleRate); sensitivity=\(sensitivity); typing=\(suppressTyping); tapOnly=\(tapOnly); enabled=\(actionsEnabled)")
+        diagnostics.log("settings", "preset=\(preset.rawValue); action=\(doubleTapAction.rawValue); input=\(input.rawValue); sampleRate=\(sampleRate); sensitivity=\(sensitivity); typing=\(suppressTyping); enabled=\(actionsEnabled)")
     }
     private func noteKey() {
         // Never retain characters, key codes, or application identity.
@@ -226,6 +230,7 @@ final class AppModel: ObservableObject {
                 if locked {
                     if self.awaitingLock {
                         self.awaitingLock = false
+                        self.showLockReceiptOnReturn = true
                         self.acknowledgment = "macOS reported that the screen locked"
                         self.diagnostics.log("lock", self.acknowledgment)
                     }
@@ -244,6 +249,11 @@ final class AppModel: ObservableObject {
         // Lock, display and session notifications overlap. Restart only when
         // crossing the active boundary, not once for every notification.
         if wasInactive != !inactiveReasons.isEmpty { restart() }
+        if inactiveReasons.isEmpty, showLockReceiptOnReturn {
+            showLockReceiptOnReturn = false
+            acknowledgment = "Mac locked by TapThatX"
+            toast.show(acknowledgment)
+        }
     }
 
     func resetInteraction(resetDetector: Bool = true) {
@@ -310,17 +320,42 @@ final class AppModel: ObservableObject {
     }
     private func route(_ event: GestureEvent, at time: Double) {
         if event == .double { recognizedPairs += 1 }
-        // Once the automatic selection starts, additional vibration must not
-        // dismiss it. Escape and an outside click still cancel the menu.
-        guard !ring.state.automaticLock, !awaitingLock else { return }
+        // Ignore additional vibration while a lock request is in flight.
+        guard !ring.state.automaticAction, ring.state.committing == nil, !awaitingLock else { return }
         guard input != .sensor || sampleRate >= 50 else { return }
-        if preset == .assistant, !ring.isOpen {
-            guard event == .double else { return }
+        switch event {
+        case .ambiguous:
+            diagnostics.log("gesture", "Ambiguous sequence cancelled")
+            if ring.isOpen { ring.dismiss() }
+        case .single:
+            if ring.isOpen {
+                ring.advance()
+                diagnostics.log("ring", "Tap selected: \(ring.state.selected?.rawValue ?? "none")")
+            }
+        case .triple: return // Triple-tap is intentionally unavailable.
+        case .double:
             lastDoubleTime = time
-            guard !isTuning, diagnostics.current == nil else { return }
+            diagnostics.log("gesture", "Double knock; \(preset.rawValue)")
+            if ring.isOpen {
+                // Preview uses the same gestures. execute(_:) retains all action
+                // availability checks, so settings and simulation remain dry runs.
+                if let selected = ring.state.selected { ring.confirm(selected) }
+            } else {
+                if let reason = actionBlockReason { acknowledgment = reason; toast.show(reason); return }
+                if let command = doubleTapAction.command {
+                    if command == .lock || command == .playPause { ring.openAndPerform(command) }
+                    else { execute(command) }
+                } else { ring.open() }
+            }
+            diagnostics.log("ring", ring.isOpen ? "Opened" : "Closed or direct action")
+            router.consumeOpening(at: time)
+        }
+    }
+    private func execute(_ command: Command) {
+        if let intent = command.assistantIntent {
             if let reason = actionBlockReason { acknowledgment = reason; toast.show(reason); return }
             let token = generation
-            AssistantActionExecutor().execute(assistantIntent, stillEnabled: { [weak self] in
+            AssistantActionExecutor().execute(intent, stillEnabled: { [weak self] in
                 guard let self else { return false }
                 return self.generation == token && self.canEnableActions
             }) { [weak self] result in
@@ -330,32 +365,7 @@ final class AppModel: ObservableObject {
             }
             return
         }
-        switch event {
-        case .ambiguous:
-            diagnostics.log("gesture", "Ambiguous sequence cancelled")
-            if ring.isOpen { ring.dismiss() }
-        case .single: if ring.isOpen && ring.state.tapOnly { ring.advance() }
-        case .triple: return // Triple-tap is intentionally unavailable.
-        case .double:
-            lastDoubleTime = time
-            diagnostics.log("gesture", "Double knock; \(preset.rawValue)")
-            if calibrationMode || isTuning || diagnostics.current != nil {
-                diagnostics.log("gesture", actionBlockReason ?? "Actions paused")
-                return
-            }
-            if ring.isOpen {
-                if ring.state.tapOnly {
-                    if let selected = ring.state.selected { ring.confirm(selected) }
-                    else { ring.dismiss(); acknowledgment = "No command selected — cancelled" }
-                } else { ring.dismiss() }
-            } else if preset == .quickAction { execute(quickAction) }
-            else if preset == .doubleTapLock { ring.openAndLock() }
-            else { ring.open(tapOnly: tapOnly) }
-            diagnostics.log("ring", ring.isOpen ? "Opened" : "Closed or direct action")
-            router.consumeOpening(at: time)
-        }
-    }
-    private func execute(_ command: Command) {
+
         let allowed = actionsEnabled && canEnableActions && diagnostics.current == nil
         if allowed && !ActionExecutor.trusted { ActionExecutor.requestPermission() }
         acknowledgment = actionBlockReason ?? ActionExecutor().execute(command, enabled: allowed)
@@ -374,7 +384,7 @@ final class AppModel: ObservableObject {
         toast.show(acknowledgment)
     }
     func inspectAssistantControls() { acknowledgment = AssistantActionExecutor().inspect() }
-    func previewRing() { resetInteraction(resetDetector: false); ring.open(tapOnly: tapOnly); router.consumeOpening(at: now) }
+    func previewRing() { resetInteraction(resetDetector: false); ring.open(); router.consumeOpening(at: now) }
     func simulateKnock() {
         guard input == .simulated, !paused else { return }
         simulatedUntil = now + 0.018
@@ -421,7 +431,9 @@ final class AppModel: ObservableObject {
         for impact in ready {
             if !suppressTyping || lastKeyTime.map({ abs(impact - $0) > 0.18 }) != false { knock(at: impact) }
         }
-        if let event = router.advance(to: time - 0.04) { route(event, at: time) }
+        // Expire using processed sensor time, including the 35 ms pulse-confirmation
+        // window. Wall time can run ahead of a second tap still in the sensor batch.
+        if let event = router.advance(wallTime: time, processedSensorTime: lastSensorTime ?? time) { route(event, at: time) }
         diagnostics.tick()
         // The graph draws independently at 20 Hz. The large settings form only
         // refreshes counters once a second, and never while hidden or occluded.
