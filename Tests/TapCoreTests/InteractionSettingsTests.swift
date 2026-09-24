@@ -39,6 +39,12 @@ final class InteractionSettingsTests: XCTestCase {
         _ = router.knock(at: 1); _ = router.knock(at: 1.2)
         XCTAssertEqual(router.advance(to: 1.51), .double)
     }
+
+    func testPersonalizedPairWindowAcceptsSlowerLightDoubleTap() {
+        var router = GestureRouter(maximumInterval: 0.7)
+        XCTAssertTrue(router.knock(at: 1).isEmpty)
+        XCTAssertEqual(router.knock(at: 1.64), [.double])
+    }
 }
 
 final class AssistantControlsTests: XCTestCase {

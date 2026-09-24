@@ -6,12 +6,14 @@ public struct GestureRouter {
     public enum State { case idle, firstKnockPending(Double), secondKnockPending(Double), cooldown(until: Double) }
     public private(set) var state: State = .idle
     public let minimumInterval = 0.1
-    public let maximumInterval = 0.45
+    public let maximumInterval: Double
     private let tripleInterval: Double
     private let recognizesTriples: Bool
-    public init(recognizesTriples: Bool = false, tripleInterval: Double = 0.45) {
+    public init(recognizesTriples: Bool = false, tripleInterval: Double = 0.45,
+                maximumInterval: Double = 0.45) {
         self.recognizesTriples = recognizesTriples
         self.tripleInterval = min(0.45, max(0.2, tripleInterval))
+        self.maximumInterval = min(0.8, max(0.3, maximumInterval))
     }
     // The detector already rejects impact echoes. Double-only routing needs only
     // the minimum inter-tap gap, not another 350 ms blind period after a pair.
@@ -20,7 +22,8 @@ public struct GestureRouter {
     public mutating func consumeOpening(at time: Double) { state = .cooldown(until: time + recoveryInterval) }
 
     /// Do not expire a pair while an onset can still be awaiting pulse confirmation
-    /// or delivery. The detector confirms within 35 ms; retain a 40 ms margin.
+    /// or delivery. A calibrated detector can confirm for up to 50 ms; the caller
+    /// delivers ready impacts before advancing this deadline.
     public mutating func advance(wallTime: Double, processedSensorTime: Double) -> GestureEvent? {
         advance(to: min(wallTime, processedSensorTime) - 0.04)
     }

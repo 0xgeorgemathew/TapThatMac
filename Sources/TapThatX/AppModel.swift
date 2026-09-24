@@ -37,12 +37,20 @@ final class AppModel: ObservableObject {
     @Published var sensitivity = 2.0 {
         didSet {
             UserDefaults.standard.set(sensitivity, forKey: "knockSensitivity")
-            UserDefaults.standard.removeObject(forKey: "calibrationSessionID")
             detector.settings.sensitivity = sensitivity
+            if !applyingProfile {
+                activeCalibrationProfile = nil
+                UserDefaults.standard.removeObject(forKey: "activeCalibrationProfileID")
+                UserDefaults.standard.removeObject(forKey: "calibrationSessionID")
+            }
+            persistDetectorSettings()
             resetInteraction(); logSettings()
         }
     }
-    @Published var suppressTyping = true { didSet { detector.settings.suppressTyping = suppressTyping; resetInteraction(); logSettings() } }
+    @Published var suppressTyping = true { didSet {
+        detector.settings.suppressTyping = suppressTyping
+        persistDetectorSettings(); resetInteraction(); logSettings()
+    } }
     @Published var actionsEnabled = !CommandLine.arguments.contains("--calibrate") { didSet { resetInteraction(resetDetector: false); logSettings() } }
     @Published var status = "Starting"
     @Published var helperStatus = HelperClient.status
@@ -63,6 +71,9 @@ final class AppModel: ObservableObject {
     @Published var accessibilityPermission = false
     private(set) var warmingUp = true
     @Published var calibrationMode = CommandLine.arguments.contains("--calibrate")
+    @Published private(set) var calibrationProfiles: [CalibrationProfile] = []
+    @Published private(set) var activeCalibrationProfile: CalibrationProfile?
+    @Published private(set) var hasSeenCalibrationOnboarding = UserDefaults.standard.bool(forKey: "hasSeenCalibrationOnboarding")
     let diagnostics = DiagnosticsStore()
     let calibration: CalibrationController
     private var calibrationObservation: AnyCancellable?
@@ -72,6 +83,7 @@ final class AppModel: ObservableObject {
     private let helper = HelperClient()
     private let toast = AcknowledgmentController()
     private var detector = KnockDetector()
+    private var applyingProfile = false
     private var router = GestureRouter()
     private var lastKeyTime: Double?
     private var timer: Timer?
@@ -144,10 +156,11 @@ final class AppModel: ObservableObject {
     }
     var canStartCalibration: Bool { calibrationUnavailableReason == nil }
 
-    func beginCalibration(surface: String, placement: String) {
+    func beginCalibration() {
         guard canStartCalibration else { return }
         resetInteraction()
-        calibration.begin(context: CalibrationContext(surface: surface, placement: placement,
+        markCalibrationOnboardingSeen()
+        calibration.begin(context: CalibrationContext(surface: "Automatic", placement: diagnostics.model,
             device: diagnostics.model, os: ProcessInfo.processInfo.operatingSystemVersionString,
             input: input.rawValue, requestedRate: input == .helper ? 800 : sampleRate,
             initialSettings: detector.settings))
@@ -162,21 +175,74 @@ final class AppModel: ObservableObject {
     }
     func applyCalibration() {
         guard calibration.stage == .complete, calibration.session?.verificationPassed == true,
-              let floor = calibration.floor, canStartCalibration,
-              calibration.session?.context.input == input.rawValue else { return }
-        setAmplitudeFloor(floor)
-        UserDefaults.standard.set(calibration.session?.id.uuidString, forKey: "calibrationSessionID")
+              var settings = calibration.candidateSettings, let session = calibration.session,
+              canStartCalibration, session.context.input == input.rawValue else { return }
+        settings.suppressTyping = suppressTyping
+        applyingProfile = true
+        sensitivity = settings.sensitivity
+        detector.settings = settings
+        router = GestureRouter(maximumInterval: settings.maximumTapInterval)
+        applyingProfile = false
+        persistDetectorSettings()
+        let profile = CalibrationProfile(session: session, settings: settings)
+        calibrationProfiles.removeAll { $0.id == profile.id }
+        calibrationProfiles.insert(profile, at: 0)
+        activeCalibrationProfile = profile
+        persistCalibrationProfiles()
+        UserDefaults.standard.set(profile.id.uuidString, forKey: "activeCalibrationProfileID")
+        UserDefaults.standard.set(profile.id.uuidString, forKey: "calibrationSessionID")
         calibration.markApplied()
-        acknowledgment = "Personal sensitivity applied. Recalibrate when the surface or placement changes."
-        diagnostics.log("calibration", "Applied session \(calibration.session!.id); floor=\(floor)")
+        markCalibrationOnboardingSeen()
+        acknowledgment = "Your personal tap profile is active."
+        diagnostics.log("calibration", "Applied session \(session.id); floor=\(settings.amplitudeFloor); rise=\(settings.minimumRiseRate)/\(settings.impulseMinimumRiseRate); duration=\(settings.maximumPulseDuration); pair=\(settings.maximumTapInterval)")
+    }
+
+    func activateCalibrationProfile(_ id: UUID) {
+        guard let profile = calibrationProfiles.first(where: { $0.id == id }), !calibration.blocksActions else { return }
+        var settings = profile.settings
+        settings.suppressTyping = suppressTyping
+        applyingProfile = true
+        sensitivity = settings.sensitivity
+        detector.settings = settings
+        router = GestureRouter(maximumInterval: settings.maximumTapInterval)
+        applyingProfile = false
+        activeCalibrationProfile = profile
+        persistDetectorSettings()
+        UserDefaults.standard.set(id.uuidString, forKey: "activeCalibrationProfileID")
+        acknowledgment = "\(profile.name) profile applied"
+    }
+
+    func keepCurrentSettingsWithoutProfile() {
+        activeCalibrationProfile = nil
+        UserDefaults.standard.removeObject(forKey: "activeCalibrationProfileID")
+        UserDefaults.standard.removeObject(forKey: "calibrationSessionID")
+        acknowledgment = "Current detector settings kept without a tap profile"
+    }
+
+    func markCalibrationOnboardingSeen() {
+        guard !hasSeenCalibrationOnboarding else { return }
+        hasSeenCalibrationOnboarding = true
+        UserDefaults.standard.set(true, forKey: "hasSeenCalibrationOnboarding")
     }
 
     init(startServices: Bool = true, calibration: CalibrationController = CalibrationController()) {
         self.calibration = calibration
         calibrationObservation = calibration.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
-        let savedSensitivity = UserDefaults.standard.object(forKey: "knockSensitivity") as? Double ?? 2.0
-        sensitivity = savedSensitivity.isFinite ? min(7, max(0.5, savedSensitivity)) : 2.0
-        detector.settings.sensitivity = sensitivity
+        let storedSettings = Self.loadDetectorSettings()
+        var savedSettings = storedSettings ?? DetectorSettings()
+        if storedSettings == nil {
+            let savedSensitivity = UserDefaults.standard.object(forKey: "knockSensitivity") as? Double ?? 2.0
+            savedSettings.sensitivity = savedSensitivity.isFinite ? min(7, max(0.5, savedSensitivity)) : 2.0
+        }
+        sensitivity = savedSettings.sensitivity
+        suppressTyping = savedSettings.suppressTyping
+        detector.settings = savedSettings
+        router = GestureRouter(maximumInterval: savedSettings.maximumTapInterval)
+        calibrationProfiles = Self.loadCalibrationProfiles()
+        if let rawID = UserDefaults.standard.string(forKey: "activeCalibrationProfileID"),
+           let id = UUID(uuidString: rawID) {
+            activeCalibrationProfile = calibrationProfiles.first { $0.id == id }
+        }
         guard startServices else { return }
         sensor.onSamples = { [weak self] in self?.ingest($0) }
         sensor.onStatus = { [weak self] in self?.sensorStatus($0) }
@@ -216,6 +282,23 @@ final class AppModel: ObservableObject {
     }
     private func logSettings() {
         diagnostics.log("settings", "preset=\(preset.rawValue); action=\(doubleTapAction.rawValue); input=\(input.rawValue); sampleRate=\(sampleRate); sensitivity=\(sensitivity); typing=\(suppressTyping); enabled=\(actionsEnabled)")
+    }
+    private func persistDetectorSettings() {
+        guard let data = try? JSONEncoder().encode(detector.settings) else { return }
+        UserDefaults.standard.set(data, forKey: "detectorSettings")
+    }
+    private static func loadDetectorSettings() -> DetectorSettings? {
+        guard let data = UserDefaults.standard.data(forKey: "detectorSettings") else { return nil }
+        return try? JSONDecoder().decode(DetectorSettings.self, from: data)
+    }
+    private func persistCalibrationProfiles() {
+        guard let data = try? JSONEncoder().encode(calibrationProfiles) else { return }
+        UserDefaults.standard.set(data, forKey: "calibrationProfiles")
+    }
+    private static func loadCalibrationProfiles() -> [CalibrationProfile] {
+        guard let data = UserDefaults.standard.data(forKey: "calibrationProfiles"),
+              let profiles = try? JSONDecoder().decode([CalibrationProfile].self, from: data) else { return [] }
+        return profiles
     }
     private func noteKey() {
         // Never retain characters, key codes, or application identity.
@@ -494,8 +577,8 @@ final class AppModel: ObservableObject {
         for impact in ready {
             if !suppressTyping || lastKeyTime.map({ abs(impact - $0) > 0.18 }) != false { knock(at: impact) }
         }
-        // Expire using processed sensor time, including the 35 ms pulse-confirmation
-        // window. Wall time can run ahead of a second tap still in the sensor batch.
+        // Expire using processed sensor time. Wall time can run ahead of a second
+        // tap that is still awaiting pulse confirmation in the sensor batch.
         if let event = router.advance(wallTime: time, processedSensorTime: lastSensorTime ?? time) { route(event, at: time) }
         diagnostics.tick()
         // The graph draws independently at 20 Hz. The large settings form only

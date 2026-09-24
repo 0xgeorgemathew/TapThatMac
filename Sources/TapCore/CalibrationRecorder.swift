@@ -28,7 +28,9 @@ public struct CalibrationRecorder {
     public mutating func endResponse(at time: Double) {
         guard responseEnd == nil, let cueTime else { return }
         responseEnd = time
-        if time - cueTime > 1.65 { flag("The tap prompt stayed on screen too long. Please retry.") }
+        if time - cueTime > step.responseDuration + 0.15 {
+            flag("The tap prompt stayed on screen too long. Please retry.")
+        }
     }
     public mutating func append(_ sample: AccelerationSample, receivedAt: Double) {
         guard sample.time.isFinite, sample.x.isFinite, sample.y.isFinite, sample.z.isFinite,

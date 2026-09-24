@@ -70,10 +70,33 @@ public enum ReportDecoder {
     }
 }
 
-public struct DetectorSettings: Codable {
+public struct DetectorSettings: Codable, Equatable {
     public var sensitivity: Double = 1
     public var suppressTyping = true
+    /// Minimum onset speed for the broader knock envelope, in g/s.
+    public var minimumRiseRate: Double = 1
+    /// Light contacts use a shorter high-pass path and need a sharper onset.
+    public var impulseMinimumRiseRate: Double = 3
+    /// Contacts that remain above their confirmation level longer than this are motion, not taps.
+    public var maximumPulseDuration: Double = 0.035
+    /// Longest gap between deliberate contacts in one double tap.
+    public var maximumTapInterval: Double = 0.45
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case sensitivity, suppressTyping, minimumRiseRate, impulseMinimumRiseRate, maximumPulseDuration,
+             maximumTapInterval
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        sensitivity = try values.decodeIfPresent(Double.self, forKey: .sensitivity) ?? 1
+        suppressTyping = try values.decodeIfPresent(Bool.self, forKey: .suppressTyping) ?? true
+        minimumRiseRate = try values.decodeIfPresent(Double.self, forKey: .minimumRiseRate) ?? 1
+        impulseMinimumRiseRate = try values.decodeIfPresent(Double.self, forKey: .impulseMinimumRiseRate) ?? 3
+        maximumPulseDuration = try values.decodeIfPresent(Double.self, forKey: .maximumPulseDuration) ?? 0.035
+        maximumTapInterval = try values.decodeIfPresent(Double.self, forKey: .maximumTapInterval) ?? 0.45
+    }
     public static func sensitivity(forAmplitudeFloor value: Double) -> Double {
         guard value.isFinite else { return 2 }
         return min(7, 0.035 / min(0.07, max(0.005, value)))

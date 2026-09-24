@@ -3,12 +3,52 @@ import TapCore
 
 struct TuningPane: View {
     @ObservedObject var model: AppModel
+    let openCalibration: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PaneHeader(title: "Find your tap",
                        detail: "Tap twice while watching the signal. Actions stay paused while settings are open.")
             Form {
+                Section {
+                    HStack(spacing: 14) {
+                        Image(systemName: "scope")
+                            .font(.system(size: 26)).foregroundStyle(ReactorTheme.accent)
+                            .frame(width: 44, height: 44)
+                            .background(ReactorTheme.accent.opacity(0.12), in: Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(model.activeCalibrationProfile?.name ?? "No tap profile")
+                                .font(.headline)
+                            Text(model.activeCalibrationProfile == nil
+                                 ? "Teach TapThatX your light and natural taps."
+                                 : "Your personal tap settings are active.")
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(model.activeCalibrationProfile == nil ? "Calibrate…" : "Recalibrate…") {
+                            openCalibration()
+                        }.reactorGlassButton()
+                    }
+
+                    if model.calibrationProfiles.count > 1 {
+                        Picker("Tap profile", selection: Binding(
+                            get: { model.activeCalibrationProfile?.id },
+                            set: { id in
+                                if let id { model.activateCalibrationProfile(id) }
+                                else { model.keepCurrentSettingsWithoutProfile() }
+                            }
+                        )) {
+                            Text("Current custom settings").tag(Optional<UUID>.none)
+                            ForEach(model.calibrationProfiles) { profile in
+                                Text(profile.name).tag(Optional(profile.id))
+                            }
+                        }
+                    }
+                } footer: {
+                    Text("Run calibration again whenever your taps or setup feel different.")
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 Section {
                     HStack {
                         Label(model.status, systemImage: "waveform")

@@ -1,78 +1,46 @@
 # Detection and calibration from first principles
 
-## Starting point
+TapThatX calibrates its deterministic pulse detector from fresh gestures on the current Mac. It does not import historical captures, train a general classifier, upload motion, or ask the user to label a dataset.
 
-An accelerometer measures motion, not intent or touch. A useful detector must distinguish a deliberate contact from background motion, confirm it promptly, avoid counting the same mechanical response twice, and preserve the timing of separate contacts. No amplitude threshold alone establishes intent. A light contact that does not produce a distinguishable signal cannot be recovered by turning up sensitivity indefinitely.
+## Product contract
 
-Old collected fixtures, their dependent tests, and the capture-based audit/investigation have been removed. None of those recordings is an input to this implementation. Synthetic tests describe explicit conditions and expected software behavior; they are not evidence of physical accuracy.
+Calibration is an immersive, minimal interaction rather than a settings form. It is available on first run and from **Calibrate…** in Tap Tuning. The settings chrome disappears during the session.
 
-## Principles for improving detection
+The entire visible flow is:
 
-1. **Separate measurement from decisions.** Capture raw timestamped XYZ independently of the detector, including periods when it detects nothing. Otherwise the detector chooses its own training examples and misses become invisible.
-2. **Observe both positive and negative examples.** Light taps and knocks establish useful signal variation; quiet and ordinary keyboard/trackpad movement constrain sensitivity. Positive-only calibration encourages false activations.
-3. **Keep labels independent.** The user knows what they attempted. The UI provides a response window, and the user confirms the activity afterward. A detected peak never becomes its own label. These are interval labels with uncertainty, not exact onset annotations.
-4. **Keep distinct contacts and echoes separate.** A contact has onset, duration, and decay. Refractory timing must not substitute for pulse-shape evidence, and stronger first contacts must not hide weaker second contacts. Check singles and pairs independently.
-5. **Use time, not nominal sample counts.** Missing or delayed samples can erase an onset or distort a pulse. Reject poor collection rather than inventing interpolated evidence. Collection-rate requirements are engineering constraints, not claims that a rate guarantees recognition.
-6. **Separate fitting from checking.** Select parameters using training recordings. Freeze them before independent recordings. Never retry alternative settings against the verification round until one passes.
-7. **Measure user-visible mistakes.** Extra single events matter when a ring is open; false doubles can execute commands. Evaluate both. Count agreement without event-window agreement is insufficient.
-8. **Make failure useful.** If no setting separates contacts and background, preserve the current setting and report that result. Do not silently relax quality checks or claim successful calibration.
+1. One light tap.
+2. Two light taps.
+3. One natural tap.
+4. Two natural taps.
 
-## Implemented guided calibration
+Each gesture gets one visual indicator, a short countdown, a tap cue, and automatic captured feedback. A valid capture advances without a review screen. A missed or ambiguous gesture stays on the same step and offers one retry action. A qualifying profile is applied automatically at the end.
 
-Open **Calibration** in settings. The user chooses Laptop or Desk and describes the support/placement. Calibration requires a real sensor near 800 Hz, Input Monitoring, and a visible settings window. It never starts from a historical recording or imported dataset.
+## What is measured
 
-The 16-step sequence is:
+The accelerometer stream is collected only for the bounded four gesture windows. Each window begins 2.5 seconds before the cue, which gives the evaluator a local ambient baseline without asking for separate quiet, typing, chair, or table-bump exercises. The cue then remains open for 2.5 seconds so reaction time does not clip the second contact.
 
-- Training: quiet background, everyday movement, three separate light contacts, three separate knocks.
-- Verification: new quiet/background movement recordings, two new light contacts, two new knocks, a light pair, and a knock pair.
+For every prompted window, replay must find:
 
-Negative trials last 10 seconds. Contact trials last 6.5 seconds: a 2.5-second preparation interval, a 1.5-second visual response window, and settling time. Actual cue/response-end times are recorded. There is no sound or haptic cue that could itself vibrate the sensor. The user explicitly confirms the intended activity or retries after each trial. Extra, premature, or missed physical contacts should be retried even when collection quality passes.
+- exactly the requested number of contacts inside the response window;
+- valid pair timing for double taps;
+- no additional accepted contacts outside the response window;
+- continuous sensor delivery near 800 Hz;
+- no typing over the requested gesture.
 
-This is a short personalization check, not an independently validated accuracy benchmark. Verification is a later round within the same session; release-level evaluation still needs different days, users, devices, and placements. The visual cue is timestamped when the UI model changes, not when a display photon appears, so it is deliberately a broad interval label rather than a latency measurement.
+The detector combines a broad motion envelope with a short high-pass impulse path. The impulse path may operate below the broad motion floor because it must also pass stricter onset-speed and pulse-duration gates. Accepted contacts from either path are coalesced for 140 ms, covering the 90–105 ms chassis echo seen in local hardware traces without merging an ordinary human double tap.
 
-### Collection integrity
+The fitter searches a deliberately small set of amplitude floors, onset-speed gates, maximum pulse durations, and pair windows. It prefers the strictest profile that preserves all four gestures and rejects extra impacts in their surrounding baselines. Pair windows range from the default 450 ms to 700 ms, allowing calibration to preserve a comfortable light-tap cadence without slowing every user by default. The search is intentionally bounded because four gestures cannot justify a broad parameter grid.
 
-`CalibrationRecorder` collects before production sample-age and detection gates. It bounds each trial to 12,000 samples and 2,048 key markers. It rejects invalid values, duplicate/reversed time, incomplete beginning/end, rate outside 700–900 Hz, gaps above 20 ms, delivery delays above 200 ms, delayed tap prompts, typing during positive trials, and interrupted recordings. Known dropped/rejected reports invalidate the trial; helper queue overflow now contributes to that counter.
+## State and safety
 
-Sensor/input changes, pausing, lifecycle resets, hidden calibration, and loss of keyboard monitoring interrupt active collection. Changing input/rate/sensitivity midway requires returning to the captured configuration or starting a new session. System actions and ring routing stay blocked while calibration is ready, recording, or awaiting review, even if the settings window closes. Pending actions are invalidated when calibration begins.
+System actions and ring routing remain blocked while calibration is ready, recording, or checking a gesture. Hiding the window, changing sensor configuration, pausing, losing Input Monitoring, missing samples, or delayed delivery invalidates the active capture. Existing detector settings remain unchanged unless all four gestures produce a candidate profile.
 
-Quality acceptance means the stream is suitable for evaluation. It does not establish that the activity actually occurred. User confirmation is separately required.
+Sessions use unique local files under `~/Library/Application Support/TapThatX/Calibration/`. Each checkpoint records provenance, raw XYZ motion for that bounded window, cue timing, quality issues, and selected settings. Typed characters and audio are never recorded. Nothing is uploaded.
 
-### Personal sensitivity selection
+Schema version 4 adds the light-impulse threshold and learned pair cadence to the four-gesture flow. The replay tool retains support for earlier session shapes when they still reproduce under the current detector, but those legacy exercises are never shown in a new calibration.
 
-The current pulse detector remains the baseline algorithm. This implementation improves how its sensitivity is chosen for the individual, rather than substituting an unvalidated general classifier.
+## Limits
 
-Training tries a small, declared set of amplitude floors within existing supported limits. Each setting is tested independently, because the existing onset/decay/recovery rules need not behave monotonically with the floor. The highest qualifying floor is selected as an amplitude rejection margin; this does not prove that it has the best real-world false-positive rate.
+Positive gesture calibration can personalize contact amplitude and pulse shape, while the pre-cue baseline catches nearby ambient impacts. It cannot characterize every accidental movement on every surface. In particular, a movement that never occurs inside the four bounded windows cannot be learned from that session.
 
-A qualifying setting must produce exactly the requested number of contacts inside each confirmed response window, no additional contacts elsewhere after replay warmup, and zero accepted contacts in negative trials. The first 1.5 seconds reconstruct filter state and are not scored. Keyboard suppression is disabled during calibration scoring so it cannot conceal false sensor events in the negative examples. The user's normal typing-suppression preference is not changed.
-
-The candidate is frozen after eight confirmed training trials. Verification uses the remaining eight new trials, including pairs with valid router timing. A failed verification ends the session without changing sensitivity. It is not reused for additional tuning. Successful verification offers **Use this sensitivity**; application is explicit and uses the existing persisted sensitivity setting. The applied session ID is stored for provenance. A change in surface or support needs a new calibration; this is not an automatic desk/lid classifier.
-
-### Storage and provenance
-
-Each session records a UUID, date, schema/detector version, device/OS, input, requested rate, initial settings, surface, placement, raw samples, observed rate/gaps/delivery delay, actual cue windows, keyboard timing, quality reasons, confirmation, partition, selected floor, and verification result.
-
-Files are stored locally under `~/Library/Application Support/TapThatX/Calibration/session-<UUID>.json`. New sessions never reuse an old filename. Each confirmation or retry atomically checkpoints that session. Failed/unconfirmed attempts remain distinguishable and are excluded from fitting. Failed saves retain the pending trial and block progression. At most 48 attempts are retained per session. Cancellation and normal shutdown attempt to save partial work; a process crash can lose the current unconfirmed recording, while prior checkpoints remain. There is no automatic training from saved sessions, no upload, no microphone, and no recorded characters.
-
-The existing diagnostic recordings pane is explicitly separate. Its exports now use unique filenames; they cannot qualify as guided calibration input.
-
-`ReplayCaptures <session.json>` checks the versioned guided format, reproduces the frozen candidate, and reports matched/unexpected events and valid pairs. Old count-only exports are rejected. Replaying is diagnostic, never a command executor.
-
-## Next algorithm experiments
-
-These are hypotheses derived from the problem, not implemented or validated improvements:
-
-- **Noise estimation independent of candidate acceptance:** estimate a bounded background distribution so prolonged movement can be recognized without letting a few strong contacts inflate the baseline. Compare robust quantiles or clipped energy with explicit adaptation/recovery times. Require both a minimum physical amplitude and contrast above local noise.
-- **Separate sensitivity from pulse shape:** distinguish candidate-start amplitude from falling-edge confirmation and rearming. A user asking for lighter contacts should not implicitly request a different duration or echo policy. Introduce these independently and inspect their effects on fresh recordings.
-- **Short-window shape evidence:** compare onset slope, energy concentration, pulse width and decay rather than a single derivative sample. Use a short bounded window; larger spectral or learned models need evidence that these simpler features cannot separate the classes.
-- **Sample-rate-aware processing:** explicitly define the high-pass residual and its gain across observed sample intervals. Cancel candidates across missing evidence. Evaluate sampling phase and jitter mathematically and synthetically before physical lower-rate testing.
-- **Shared live/replay event ordering:** use source time, delivery time, keyboard timing, and a processed-data watermark consistently. Keep action dispatch separate so delayed callbacks cannot produce stale commands.
-- **Performance:** first measure delivery latency, main-thread stalls, allocations and sensor wakeups. Arithmetic micro-optimization is worthwhile only if it is a measured bottleneck; lowering sensor rate can discard the very transient being detected.
-
-For each experiment: declare a failure it should address, add deterministic tests for its invariant, collect a new independent session set, freeze parameters before evaluation, and compare missed contacts, false singles/doubles, duplicates, pair completion, and confirmation/action latency. Predeclare acceptable false-action and latency budgets. Keep failed results. Do not re-label data to agree with the detector or market short-session success as universal reliability.
-
-## Validation boundary
-
-Automated tests exercise clean and corrupt streams, cue and typing contamination, independent labels, extra/misplaced contacts, missing steps, fitting/verification separation, pair timing, interruption, persistence failures, unique archives and end-to-end controller transitions using generated signals. Physical performance must be assessed by a person completing the new flow on the target hardware. No old recorded dataset establishes a detection claim here.
-
-UI and persistence use existing SwiftUI/Foundation APIs and no new dependencies. Context7 was unavailable in this session; [Apple's ProgressView documentation](https://developer.apple.com/documentation/swiftui/progressview) and [Data writing options](https://developer.apple.com/documentation/foundation/nsdata/writingoptions) were consulted as the official fallback.
+Physical validation still requires people to complete the flow across supported Macs, surfaces, placements, typing patterns, and accessibility settings. Automated tests cover generated gestures, missing and extra contacts, invalid pair timing, corrupt streams, persistence failures, interruption, legacy replay, and end-to-end state transitions. Generated signals do not establish real-world detection accuracy.

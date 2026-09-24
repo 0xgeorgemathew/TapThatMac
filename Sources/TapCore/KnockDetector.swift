@@ -52,7 +52,13 @@ private struct PulseDetector {
         feature = sqrt(dx * dx + dy * dy + dz * dz)
         let riseRate = (feature - previousFeature) / dt
         shortAverage += (1 - exp(-dt / 0.012)) * (feature - shortAverage)
-        threshold = max(settings.amplitudeFloor, baseline * 4.5)
+        // A sharp contact is distinguishable below the broader motion floor: it
+        // must also satisfy the stricter impulse rise-rate and duration gates.
+        // Keep an absolute guard so increasing sensitivity cannot chase sensor noise.
+        let amplitudeFloor = lightTapMode
+            ? max(0.003, settings.amplitudeFloor * 0.625)
+            : settings.amplitudeFloor
+        threshold = max(amplitudeFloor, baseline * 4.5)
         warmingUp = sample.time - startTime < 1.5
         if warmingUp || feature < threshold {
             baseline += (1 - exp(-dt / (warmingUp ? 0.2 : 1.5))) * (min(feature, threshold) - baseline)
@@ -64,9 +70,10 @@ private struct PulseDetector {
 
         if let onset = candidateTime {
             candidatePeak = max(candidatePeak, feature)
-            if sample.time - onset > 0.035 {
+            if sample.time - onset > settings.maximumPulseDuration {
                 candidateTime = nil
-                rejectionTime = sample.time; rejectionReason = "pulse longer than 35 ms"
+                rejectionTime = sample.time
+                rejectionReason = "pulse longer than \(Int(settings.maximumPulseDuration * 1_000)) ms"
             } else if feature < max(candidateThreshold, candidateRiseRate >= 5 ? candidatePeak * 0.5 : 0) {
                 // A very sharp impact can have a long settling tail. Confirm its
                 // half-height decay, independent of the user's amplitude floor.
@@ -89,7 +96,8 @@ private struct PulseDetector {
         // rearming. A threshold crossing alone accepts shaking and ring echoes.
         // Slow swells from moving objects can have short threshold crossings.
         // Require a sharp onset as well as a short pulse.
-        guard riseRate >= (lightTapMode ? 3.0 : 1.0) else {
+        let minimumRiseRate = lightTapMode ? settings.impulseMinimumRiseRate : settings.minimumRiseRate
+        guard riseRate >= minimumRiseRate else {
             rejectionTime = sample.time; rejectionReason = "onset too slow"
             return false
         }
@@ -134,7 +142,9 @@ public struct KnockDetector {
         guard knock || light else { return false }
         let onset = min(knock ? envelope.acceptedOnset : .infinity,
                         light ? impulse.acceptedOnset : .infinity)
-        guard onset - acceptedOnset >= 0.09 else { return false }
+        // Real Mac chassis traces contain a second ring 90–105 ms after one
+        // finger contact. It is neither a new tap nor useful pair input.
+        guard onset - acceptedOnset >= 0.14 else { return false }
         acceptedOnset = onset
         acceptedPath = light ? "impulse" : "envelope"
         return true

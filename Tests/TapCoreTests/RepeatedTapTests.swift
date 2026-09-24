@@ -53,4 +53,31 @@ final class RepeatedTapTests: XCTestCase {
             XCTAssertEqual(result.doubleKnockTimes.count, 4, "Floor \(floor)")
         }
     }
+
+    func testSharpLightPairBelowBroadMotionFloorIsDetected() throws {
+        var settings = DetectorSettings()
+        settings.sensitivity = DetectorSettings.sensitivity(forAmplitudeFloor: 0.008)
+        let samples = (0..<3200).map { index in
+            let time = Double(index) / 800
+            let contact = [2.0, 2.25].contains { time >= $0 && time < $0 + 0.008 }
+            return AccelerationSample(time: time, x: contact ? 0.006 : 0, y: 0, z: 1)
+        }
+        let result = try RecordingReplay.evaluate(samples: samples, keyTimes: [], settings: settings)
+        XCTAssertEqual(result.knockTimes.count, 2)
+        XCTAssertEqual(result.doubleKnockTimes.count, 1)
+    }
+
+    func testChassisEchoesAroundOneHundredMillisecondsAreCoalesced() throws {
+        var settings = DetectorSettings()
+        settings.sensitivity = DetectorSettings.sensitivity(forAmplitudeFloor: 0.008)
+        let contacts = [2.0, 2.096, 2.3, 2.396]
+        let samples = (0..<3200).map { index in
+            let time = Double(index) / 800
+            let contact = contacts.contains { time >= $0 && time < $0 + 0.008 }
+            return AccelerationSample(time: time, x: contact ? 0.012 : 0, y: 0, z: 1)
+        }
+        let result = try RecordingReplay.evaluate(samples: samples, keyTimes: [], settings: settings)
+        XCTAssertEqual(result.knockTimes.count, 2)
+        XCTAssertEqual(result.doubleKnockTimes.count, 1)
+    }
 }

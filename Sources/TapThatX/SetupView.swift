@@ -9,42 +9,54 @@ struct SetupView: View {
     @State private var expectedDoubleKnocks = 1
 
     var body: some View {
-        VStack(spacing: 0) {
-            NavigationSplitView(columnVisibility: $columnVisibility) {
-                List(selection: $selection) {
-                    ForEach(SettingsSection.allCases) { section in
-                        Label(section.title, systemImage: section.icon)
-                            .tag(section)
+        Group {
+            if selection == .calibration {
+                CalibrationPane(
+                    model: model,
+                    calibration: model.calibration,
+                    onDismissOnboarding: { selection = .tuning }
+                )
+            } else {
+                VStack(spacing: 0) {
+                    NavigationSplitView(columnVisibility: $columnVisibility) {
+                        List(selection: $selection) {
+                            ForEach(SettingsSection.allCases) { section in
+                                Label(section.title, systemImage: section.icon)
+                                    .tag(section)
+                            }
+                        }
+                        .listStyle(.sidebar)
+                        .navigationSplitViewColumnWidth(min: 190, ideal: 215, max: 260)
+                    } detail: {
+                        pane
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .overlay(alignment: .bottom) { scrollFade }
                     }
+                    // The shelf sits below the split view in the layout, so the panes'
+                    // scroll bounds end at the shelf by construction.
+                    settingsFooter
                 }
-                .listStyle(.sidebar)
-                .navigationSplitViewColumnWidth(min: 190, ideal: 215, max: 260)
-            } detail: {
-                pane
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .overlay(alignment: .bottom) { scrollFade }
             }
-            // The shelf sits below the split view in the layout, so the panes'
-            // scroll bounds end at the shelf by construction. A safeAreaInset on
-            // the split view is not honored by its hosted columns on macOS and
-            // let Form content scroll underneath the card.
-            settingsFooter
         }
         .frame(minWidth: 800, idealWidth: 900, minHeight: 560, idealHeight: 680)
         .background(Color(nsColor: .windowBackgroundColor))
         .background(SettingsWindowReader(model: model)).tint(ReactorTheme.accent)
         .onAppear {
             model.refreshPermissions()
-            if !model.accessibilityPermission || !model.typingPermission { selection = .permissions }
+            if !model.accessibilityPermission || !model.typingPermission {
+                selection = .permissions
+            } else if !model.hasSeenCalibrationOnboarding {
+                selection = .calibration
+            }
         }
     }
 
     @ViewBuilder private var pane: some View {
         switch selection ?? .tuning {
         case .permissions: PermissionsPane(model: model)
-        case .tuning:      TuningPane(model: model)
+        case .tuning:      TuningPane(model: model, openCalibration: { selection = .calibration })
         case .actions:     ActionsPane(model: model)
-        case .calibration: CalibrationPane(model: model, calibration: model.calibration)
+        case .calibration: EmptyView()
         case .recordings:  RecordingsPane(model: model,
                                           label: $label,
                                           expectedDoubleKnocks: $expectedDoubleKnocks)

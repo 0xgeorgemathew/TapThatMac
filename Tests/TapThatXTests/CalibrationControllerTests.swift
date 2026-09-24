@@ -98,29 +98,33 @@ final class CalibrationControllerTests: XCTestCase {
         XCTAssertNotEqual(first, c.archiveURL); XCTAssertTrue(FileManager.default.fileExists(atPath: first.path))
     }
 
-    func testCompleteFlowFreezesCandidateBeforeVerificationAndRequiresExplicitApplication() throws {
+    func testFourGestureFlowBuildsProfileAndRequiresExplicitApplication() throws {
         let c = controller()
-        var frozen: Double?
         for index in CalibrationStep.sequence.indices {
             record(c, at: 100 + Double(index) * 20)
             XCTAssertTrue(c.canConfirm, c.review?.quality.issues.joined(separator: ";") ?? "no review")
+            XCTAssertTrue(c.reviewMatchesExpectedGesture)
             c.confirm()
-            if index == 7 { frozen = try XCTUnwrap(c.floor) }
-            if index > 7 { XCTAssertEqual(c.floor, frozen) }
         }
         XCTAssertEqual(c.stage, .complete); XCTAssertFalse(c.applied)
         XCTAssertTrue(c.session?.verificationPassed == true); XCTAssertFalse(c.blocksActions)
         let disk = try JSONDecoder().decode(CalibrationSession.self, from: Data(contentsOf: XCTUnwrap(c.archiveURL)))
-        XCTAssertTrue(disk.verificationPassed); XCTAssertEqual(disk.trials.count, 16)
+        XCTAssertTrue(disk.verificationPassed); XCTAssertEqual(disk.trials.count, 4)
     }
 
-    func testFailedVerificationCannotOfferAnApplicableSetting() {
+    func testMissingGestureCannotProduceAnApplicableSetting() {
         let c = controller()
         for index in CalibrationStep.sequence.indices {
-            record(c, at: 100 + Double(index) * 20, contacts: index != 10)
+            record(c, at: 100 + Double(index) * 20, contacts: index != 2)
             c.confirm()
         }
         XCTAssertEqual(c.stage, .failed); XCTAssertFalse(c.session?.verificationPassed ?? true)
         XCTAssertFalse(c.applied)
+    }
+
+    func testCurrentFlowContainsOnlyTheFourRequestedGestures() {
+        let c = controller()
+        XCTAssertEqual(c.steps.map(\.activity), [.lightTap, .lightPair, .knock, .knockPair])
+        XCTAssertTrue(c.steps.allSatisfy { $0.responseDuration == 2.5 })
     }
 }

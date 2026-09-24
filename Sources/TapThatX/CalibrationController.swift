@@ -26,11 +26,24 @@ final class CalibrationController: ObservableObject {
 
     var blocksActions: Bool { [.ready, .recording, .review].contains(stage) }
     var completedCount: Int { session?.trials.filter(\.confirmed).count ?? 0 }
+    var steps: [CalibrationStep] { CalibrationStep.sequence }
     var step: CalibrationStep? {
-        CalibrationStep.sequence.indices.contains(completedCount) ? CalibrationStep.sequence[completedCount] : nil
+        steps.indices.contains(completedCount) ? steps[completedCount] : nil
     }
     var canConfirm: Bool { stage == .review && review?.quality.usable == true }
+    var reviewMatchesExpectedGesture: Bool {
+        guard canConfirm, var trial = review else { return false }
+        trial.confirmed = true
+        var permissive = DetectorSettings()
+        permissive.sensitivity = DetectorSettings.sensitivity(forAmplitudeFloor: 0.005)
+        permissive.minimumRiseRate = 0.5
+        permissive.impulseMinimumRiseRate = 1
+        permissive.maximumPulseDuration = 0.05
+        permissive.maximumTapInterval = 0.7
+        return (try? CalibrationEvaluator.score(trial, settings: permissive).passed) == true
+    }
     var floor: Double? { session?.candidateFloor }
+    var candidateSettings: DetectorSettings? { session?.candidateSettings }
 
     func begin(context: CalibrationContext) {
         guard !blocksActions else { return }
@@ -42,7 +55,7 @@ final class CalibrationController: ObservableObject {
             // Persist provenance before enabling collection. A new session never reuses an old name.
             try JSONEncoder().encode(fresh).write(to: url, options: .withoutOverwriting)
             archiveURL = url; session = fresh; recorder = nil; review = nil
-            message = "Actions stay paused throughout calibration."; saveError = nil; applied = false
+            message = ""; saveError = nil; applied = false
             stage = .ready
         } catch { saveError = "Could not create the local session: \(error.localizedDescription)" }
     }
@@ -54,7 +67,7 @@ final class CalibrationController: ObservableObject {
         }
         recorder = CalibrationRecorder(step: step, started: time)
         cueTime = nil; responseEnded = false; progress = 0; review = nil; saveError = nil
-        prompt = "Get ready. Keep still."; stage = .recording
+        prompt = "Get ready"; stage = .recording
     }
     func append(_ samples: [AccelerationSample], receivedAt: Double) {
         guard stage == .recording else { return }
@@ -68,15 +81,20 @@ final class CalibrationController: ObservableObject {
         let elapsed = time - started
         progress = min(1, max(0, elapsed / step.duration))
         if elapsed < 2.5 {
-            prompt = "Get ready · \(max(1, Int(ceil(2.5 - elapsed))))"
+            prompt = "Get ready  \(max(1, Int(ceil(2.5 - elapsed))))"
         } else if step.activity.expectedContacts == 0 {
-            prompt = step.activity == .quiet ? "Keep still" : "Use your keyboard and trackpad"
+            switch step.activity {
+            case .quiet: prompt = "Keep still"
+            case .everydayMotion: prompt = "Type and move normally"
+            case .surfaceBump: prompt = "Move your chair and nudge the table"
+            default: prompt = step.activity.title
+            }
         } else {
             if cueTime == nil { cueTime = time; recorder?.cue(at: time) }
-            if let cueTime, time - cueTime < 1.5 { prompt = "Tap now" }
+            if let cueTime, time - cueTime < step.responseDuration { prompt = "Tap now" }
             else {
                 if !responseEnded { recorder?.endResponse(at: time); responseEnded = true }
-                prompt = "Hands off · let the surface settle"
+                prompt = "Got it"
             }
         }
         // Allow the final sensor batch to arrive before inspecting coverage.
@@ -86,9 +104,7 @@ final class CalibrationController: ObservableObject {
     private func finish(at time: Double) {
         guard recorder != nil else { return }
         review = recorder?.finish(at: time); recorder = nil
-        message = review?.quality.usable == true
-            ? "Did you perform exactly the requested activity? Only confirm if you did."
-            : "This recording needs another attempt."
+        message = review?.quality.usable == true ? "" : "The sensor stream was interrupted."
         stage = .review
     }
 
@@ -106,13 +122,12 @@ final class CalibrationController: ObservableObject {
         trial.confirmed = true; next.trials.append(trial)
         let count = next.trials.filter(\.confirmed).count
         do {
-            if count == CalibrationStep.sequence.filter({ $0.partition == .training }).count {
-                next.candidateFloor = try CalibrationEvaluator.candidate(from: next.trials)
-                if next.candidateFloor == nil { next.finished = true }
-            }
-            if count == CalibrationStep.sequence.count {
-                guard let candidate = next.candidateFloor else { throw CalibrationError.incomplete }
-                next.verificationPassed = try CalibrationEvaluator.verify(next.trials, frozenFloor: candidate)
+            let sessionSteps = CalibrationStep.sequence
+            if count == sessionSteps.count {
+                next.candidateSettings = try CalibrationEvaluator.candidateSettings(
+                    from: next.trials, expectedSteps: sessionSteps)
+                next.candidateFloor = next.candidateSettings?.amplitudeFloor
+                next.verificationPassed = next.candidateSettings != nil
                 next.finished = true
             }
             try persist(next)
@@ -120,11 +135,11 @@ final class CalibrationController: ObservableObject {
             if next.finished {
                 stage = next.verificationPassed ? .complete : .failed
                 message = next.verificationPassed
-                    ? "The suggested sensitivity passed this session’s separate verification round. You can apply it below."
-                    : "No verified setting was found. Your current sensitivity is unchanged. Try a clearer contact or another placement, then start a new session."
+                    ? "Your taps are ready."
+                    : "Those gestures were too close to separate reliably. Try again with a clearer difference between light and firm taps."
             } else {
                 stage = .ready
-                message = next.candidateFloor == nil ? "Recording saved locally." : "A candidate is frozen. The next recordings check it without retuning."
+                message = ""
             }
         } catch { saveError = "Could not finish this step: \(error.localizedDescription). Your recording is still here." }
     }
@@ -134,7 +149,7 @@ final class CalibrationController: ObservableObject {
         next.trials.append(trial)
         do {
             try persist(next); session = next; review = nil; saveError = nil; stage = .ready
-            message = "Previous attempt saved as unconfirmed. Prepare to record this step again."
+            message = ""
         } catch { saveError = "Could not save this attempt: \(error.localizedDescription). Retry when storage is available." }
     }
 
@@ -145,7 +160,7 @@ final class CalibrationController: ObservableObject {
         next.finished = true
         do {
             try persist(next); session = nil; review = nil; recorder = nil; saveError = nil
-            stage = .idle; message = applied ? "Session saved. Your applied sensitivity remains active." : "Session saved. Sensitivity is unchanged."
+            stage = .idle; message = applied ? "Your tap profile remains active." : "Detector settings are unchanged."
             return true
         } catch {
             saveError = "Could not save before closing: \(error.localizedDescription). Your recordings remain in memory."

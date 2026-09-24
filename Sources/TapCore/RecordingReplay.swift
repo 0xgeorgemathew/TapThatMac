@@ -33,7 +33,8 @@ public enum RecordingReplay {
             previous = key
         }
         var detector = KnockDetector(); detector.settings = settings
-        var router = GestureRouter(recognizesTriples: recognizesTriples)
+        var router = GestureRouter(recognizesTriples: recognizesTriples,
+            maximumInterval: settings.maximumTapInterval)
         var pending: [Double] = []
         var knocks: [Double] = []
         var doubles: [Double] = []
