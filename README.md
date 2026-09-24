@@ -8,7 +8,9 @@ The current on-Mac detection is the working POC baseline. Set one **Double-tap a
 
 Ring reveals every action. A single tap advances clockwise after the 450 ms double-tap window; a double-tap chooses the highlighted action without advancing first. Right/Down and Left/Up cycle in opposite directions and wrap around. Return chooses, Escape cancels, and pointer selection works too. The ring starts with Play / Pause selected. Preview responds to the same gestures while actions remain paused. Direct Lock Mac and Play / Pause show the ring, swing the highlight to the command, and animate a press before executing (about 620 ms total). Choosing an action in the open ring shows a 220 ms press before execution. Escape or losing focus cancels the pending action. Trackpad haptic feedback acknowledges the request on supported hardware; a confirmation appears after unlocking when macOS confirmed the lock. macOS may cover the ring as soon as the screen locks.
 
-The ring uses the same glassy, blurred AppKit material on every supported macOS version, including macOS 15. Reduce Motion and Reduce Transparency are respected.
+A quiet chime acknowledges each confirmed ring choice, including automatic Lock Mac and Play / Pause. Hovering and moving the highlight remain silent. Confirmation keeps the ring steady and emphasizes the center icon without restarting the highlight's motion; the chime acknowledges the choice, not successful execution.
+
+The ring uses Apple's native Liquid Glass material (NSGlassEffectView) on macOS 26 and newer, so it inherits the macOS 27 Liquid Glass refinements automatically, and the same glassy, blurred AppKit material on macOS 14 and 15. Reduce Motion and Reduce Transparency are respected.
 
 ## Develop
 
@@ -24,12 +26,18 @@ open Package.swift
 Open `Package.swift` in Xcode for editing and debugging. Use the bundled app for permission and helper testing; the command-line executable does not reproduce its signing identity or resources.
 
 ```sh
-SIGNING_IDENTITY='Apple Development: Your Name (CERTIFICATE_ID)' \
-TEAM_ID='YOURTEAMID' bash scripts/build-app.sh
+bash scripts/build-app.sh
 open dist/TapThatX.app
 ```
 
-Use a consistent signing identity and installation path to retain macOS permission grants. Supply your own certificate and team through the environment. Omitting them produces an ad-hoc development bundle that cannot use the signed helper. Building does not install or replace `/Applications/TapThatX.app`.
+Create `scripts/signing.env` (git-ignored) with your identity and team, and the build picks it up:
+
+```sh
+SIGNING_IDENTITY='Apple Development: Your Name (CERTIFICATE_ID)'
+TEAM_ID='YOURTEAMID'
+```
+
+Explicit environment variables still override the file. Use a consistent signing identity and installation path to retain macOS permission grants. Supply your own certificate and team. Omitting them produces an ad-hoc development bundle that cannot use the signed helper. After a successful build the script replaces `/Applications/TapThatX.app` with the fresh bundle; set `SKIP_APP_INSTALL=1` to skip that install.
 
 See [Contributing](CONTRIBUTING.md) for the development loop and [distribution](docs/DISTRIBUTION.md) for packaging.
 
@@ -46,6 +54,14 @@ The recent export includes bounded XYZ samples, key timestamps and diagnostic ev
 
 Lower sampling rates remain experimental; below 50 Hz is monitoring only. Reliable desk detection, left/right classification, broad hardware coverage and significant whole-app CPU savings at lower rates are not established. The graph displays motion, not proof that every peak qualifies as a gesture.
 
+## Personal calibration
+
+Open **Calibration** in settings, choose your contact surface, and describe the laptop placement. At 800 Hz, the app guides you through 16 short recordings of background movement, light taps, knocks, and pairs. Confirm what you actually did after each recording; retry mistakes. Actions remain paused throughout.
+
+Collection rejects missing/delayed samples, mistimed prompts, interrupted sessions, and typing over positive contacts. The app fits sensitivity on the first round, then freezes it for new verification recordings. Only a passing result offers **Use this sensitivity**. If no setting qualifies, your existing setting stays unchanged. Recalibrate when the surface or placement changes.
+
+Sessions are saved locally under `~/Library/Application Support/TapThatX/Calibration/` with unique filenames and per-step checkpoints. No old recordings are used, and nothing is uploaded. A short calibration personalizes sensitivity; it does not establish general detection accuracy. See the [design and limits](docs/DETECTION-CALIBRATION.md).
+
 ## Layout
 
 | Path | Purpose |
@@ -55,11 +71,11 @@ Lower sampling rates remain experimental; below 50 Hz is monitoring only. Reliab
 | `Sources/TapSensorHelper` | Authenticated sensor helper |
 | `Sources/SensorProbe` | Read-only hardware diagnostic executable |
 | `Sources/ReplayCaptures` | Labeled recording replay CLI |
-| `Tests/TapCoreTests` | Deterministic regressions and curated recording fixtures |
+| `Tests/TapCoreTests` | Deterministic generated-signal, collection, calibration and interaction tests |
 | `Packaging` | Bundle metadata, app/menu icons and DMG artwork |
 | `scripts` | Validation, app bundling and distribution |
 
-[Detection investigation](docs/IMPULSE-INVESTIGATION.md) documents the baseline's evidence and limitations. Local prototypes, raw recordings and old builds are archived outside the repository; regression fixtures remain tracked.
+[First-principles detection and calibration](docs/DETECTION-CALIBRATION.md) describes the design, implemented quality checks, and remaining algorithm experiments. Historical captured fixtures and their accuracy claims have been removed.
 
 ## Attribution
 

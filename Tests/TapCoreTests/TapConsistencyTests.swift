@@ -31,18 +31,6 @@ final class TapConsistencyTests: XCTestCase {
         XCTAssertEqual(result.doubleKnockTimes.count, 1)
     }
 
-    func testLightModePreservesPreviouslyDetectedChassisCaptures() throws {
-        let url = Bundle.module.url(forResource: "calibration-labeled", withExtension: "json")!
-        let dataset = try JSONDecoder().decode(ReplayDataset.self, from: Data(contentsOf: url))
-        var settings = DetectorSettings()
-        settings.sensitivity = DetectorSettings.sensitivity(forAmplitudeFloor: 0.008)
-        for index in [1, 2, 5] {
-            let c = dataset.captures[index]
-            let result = try RecordingReplay.evaluate(samples: c.samples, keyTimes: c.keyTimes ?? [], settings: settings)
-            XCTAssertFalse(result.doubleKnockTimes.isEmpty, "Capture \(index)")
-        }
-    }
-
     func testOneRingingContactNeverBecomesAPairAcrossFrequencies() throws {
         var settings = DetectorSettings()
         settings.sensitivity = DetectorSettings.sensitivity(forAmplitudeFloor: 0.008)

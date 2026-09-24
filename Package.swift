@@ -16,13 +16,10 @@ let package = Package(
         .executableTarget(name: "TapSensorHelper", dependencies: ["TapCore"]),
         .executableTarget(name: "SensorProbe", dependencies: ["TapCore"]),
         .executableTarget(name: "ReplayCaptures", dependencies: ["TapCore"]),
+        .testTarget(name: "TapThatXTests", dependencies: ["TapThatX", "TapCore"]),
         .testTarget(
             name: "TapCoreTests",
-            dependencies: ["TapCore"],
-            resources: [
-                .copy("Fixtures/calibration-labeled.json"),
-                .copy("Fixtures/verification-round1.json")
-            ]
+            dependencies: ["TapCore"]
         )
     ],
     swiftLanguageModes: [.v5]

@@ -6,7 +6,29 @@ final class RingState: ObservableObject {
     @Published var selected: Command?
     @Published var committing: Command?
     @Published var automaticAction = false
+    @Published var selectionAngle = 0.0
+    @Published var isPresented = true
+    var presentedSelectionAngle: Double?
     var choose: ((Command) -> Void)?
+
+    func select(_ command: Command, direction: Int = 0) {
+        // Hover and confirmation can repeat the same target mid-flight. Keep
+        // its existing endpoint and spring, including the chosen winding.
+        guard selected != command else { return }
+        guard let index = Command.allCases.firstIndex(of: command) else { return }
+        // Logical identity changes immediately; the endpoint is resolved from
+        // the visible angle, including when the user reverses mid-flight.
+        let origin = presentedSelectionAngle ?? selectionAngle
+        selectionAngle = RingSelection.targetAngle(current: origin, index: index,
+                                                    count: Command.allCases.count, direction: direction)
+        selected = command
+    }
+
+    func resetSelection(_ command: Command) {
+        presentedSelectionAngle = nil
+        selected = command
+        selectionAngle = Double(Command.allCases.firstIndex(of: command) ?? 0) * 360 / Double(Command.allCases.count)
+    }
 }
 private final class RingPanel: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -14,14 +36,33 @@ private final class RingPanel: NSPanel {
 }
 
 final class RadialPanelController: NSObject, NSWindowDelegate {
-    let state = RingState()
+    private(set) var state = RingState()
     private var panel: RingPanel?
+    private var retiringPanel: RingPanel?
     private var previousApp: NSRunningApplication?
     private var monitors: [Any] = []
     private var opening = 0
+    private let playSelectionSound: () -> Void
     private(set) var isOpen = false
     var onDismiss: (() -> Void)?
     var onChoose: ((Command) -> Void)?
+
+    init(playSelectionSound: (() -> Void)? = nil) {
+        if let playSelectionSound {
+            self.playSelectionSound = playSelectionSound
+        } else {
+            // Load once before interaction, then let AppKit play asynchronously.
+            // Missing/unavailable audio must never prevent a selection.
+            let sound = NSSound(named: NSSound.Name("Tink"))
+            sound?.volume = 0.3
+            self.playSelectionSound = {
+                // A fast reopen can confirm before the previous chime ends.
+                _ = sound?.stop()
+                _ = sound?.play()
+            }
+        }
+        super.init()
+    }
 
     func openAndPerform(_ command: Command) {
         guard !isOpen else { return }
@@ -31,7 +72,7 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
         // Let the opening frame appear before moving the highlight.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) { [weak self] in
             guard let self, self.isOpen, self.opening == token else { return }
-            self.state.selected = command
+            self.state.select(command)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { [weak self] in
                 guard let self, self.isOpen, self.opening == token else { return }
                 self.confirm(command)
@@ -41,9 +82,11 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
 
     func open(automaticAction: Bool = false) {
         guard !isOpen else { return }
+        retiringPanel?.orderOut(nil); retiringPanel = nil
         opening += 1; state.automaticAction = automaticAction
+        state.isPresented = true
         previousApp = NSWorkspace.shared.frontmostApplication
-        state.selected = automaticAction ? .previous : .playPause; state.committing = nil
+        state.resetSelection(automaticAction ? .previous : .playPause); state.committing = nil
         state.choose = { [weak self] command in self?.confirm(command) }
         let pointer = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) ?? NSScreen.main else { return }
@@ -83,6 +126,17 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
         }) { monitors.append(monitor) }
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
+        // AppKit derives a borderless window's shadow from the rendered
+        // content shape. The ring fades in from transparent, so recompute the
+        // shadow once on screen and again after the opening spring settles;
+        // combined with the circular clip on MaterialContainerView this keeps
+        // the shadow on the circular glass instead of the square frame.
+        panel.invalidateShadow()
+        let shadowToken = opening
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, self.isOpen, self.opening == shadowToken, let panel = self.panel else { return }
+            panel.invalidateShadow()
+        }
     }
     private func insideCircle(_ point: NSPoint) -> Bool {
         guard let panel else { return false }
@@ -90,15 +144,16 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
     }
     func advance(by step: Int = 1) {
         guard isOpen, !state.automaticAction, state.committing == nil else { return }
-        state.selected = Command.advancing(state.selected, by: step)
+        state.select(Command.advancing(state.selected, by: step), direction: step)
     }
     func confirm(_ command: Command) {
         guard isOpen, state.committing == nil else { return }
-        state.selected = command
+        state.select(command)
         let token = opening
-        let animation: Animation? = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-            ? nil : .easeInOut(duration: 0.18)
-        withAnimation(animation) { state.committing = command }
+        // Views own their local feedback animations; keep confirmation out of
+        // the transaction that drives the moving selection surface.
+        state.committing = command
+        playSelectionSound()
         // The visible press is part of the requested interaction. Cancellation,
         // focus loss or a reset invalidates the pending action through opening.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) { [weak self] in
@@ -110,9 +165,25 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
 
     func dismiss(restoreFocus: Bool = true) {
         guard isOpen else { return }
-        isOpen = false; opening += 1; state.automaticAction = false; state.committing = nil
+        // Invalidate execution before the visual exit begins. The retiring
+        // window cannot receive input or interfere with a newly opened ring.
+        isOpen = false; opening += 1
+        state.choose = nil
         monitors.forEach(NSEvent.removeMonitor); monitors.removeAll()
-        panel?.orderOut(nil); panel = nil; state.selected = nil
+        let retiring = panel
+        panel = nil
+        retiringPanel = retiring
+        retiring?.delegate = nil
+        retiring?.ignoresMouseEvents = true
+        state.isPresented = false
+        state = RingState()
+        let exitToken = opening
+        let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : RingMotion.exitDuration
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self, retiring] in
+            retiring?.orderOut(nil)
+            guard let self, self.opening == exitToken else { return }
+            self.retiringPanel = nil
+        }
         if restoreFocus, NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier {
             previousApp?.activate(options: [])
         }
@@ -121,106 +192,32 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) { dismiss(restoreFocus: false) }
 }
 
-private struct Backdrop: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView(); view.material = .popover
-        view.blendingMode = .behindWindow; view.state = .active
-        return view
-    }
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
-}
-private struct Sector: Shape {
-    let index: Int
-    func path(in rect: CGRect) -> Path {
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let sweep = 360.0 / Double(Command.allCases.count)
-        let start = Double(index) * sweep - 90 - sweep / 2 + 1
-        let end = start + sweep - 2
-        var path = Path()
-        path.addArc(center: center, radius: rect.width / 2 - 7, startAngle: .degrees(start), endAngle: .degrees(end), clockwise: false)
-        path.addArc(center: center, radius: rect.width * 0.235, startAngle: .degrees(end), endAngle: .degrees(start), clockwise: true)
-        path.closeSubpath()
-        return path
-    }
-}
+/// The outer animated shell. It owns the opening spring and scales the single
+/// material host as one unit, so the material never appears at full size
+/// while only the labels animate.
 private struct RingView: View {
     @ObservedObject var state: RingState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var appeared = false
-    private let accent = Color(red: 0.38, green: 0.83, blue: 0.72)
+
+    private var material: RingMaterialKind {
+        if reduceTransparency { return .opaque }
+        if #available(macOS 26.0, *) { return .liquidGlass }
+        return .legacyBlur
+    }
+
     var body: some View {
         GeometryReader { geometry in
-            let size = geometry.size.width
-            ZStack {
-                if reduceTransparency { Color(nsColor: .windowBackgroundColor) }
-                else { Backdrop() }
-                LinearGradient(colors: [.white.opacity(0.20), .white.opacity(0.025), .black.opacity(0.06)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .allowsHitTesting(false)
-                ForEach(Array(Command.allCases.enumerated()), id: \.element) { index, command in
-                    let shape = Sector(index: index)
-                    Button { state.choose?(command) } label: {
-                        ZStack {
-                            shape.fill(LinearGradient(
-                                colors: state.selected == command
-                                    ? [.white.opacity(0.22), accent.opacity(0.12)]
-                                    : [.white.opacity(0.055), .white.opacity(0.015)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing))
-                            shape.stroke(LinearGradient(
-                                colors: [.white.opacity(state.selected == command ? 0.8 : 0.16),
-                                         accent.opacity(state.selected == command ? 0.45 : 0.03)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.8)
-                            VStack(spacing: 8) {
-                                Image(systemName: command.symbol).font(.system(size: 23, weight: .medium))
-                                Text(command.rawValue).font(.system(size: 10, weight: .semibold)).multilineTextAlignment(.center).frame(width: 82)
-                            }
-                            .scaleEffect(state.committing == command ? 0.88 : state.selected == command ? 1.08 : 1)
-                            .foregroundStyle(state.selected == command ? accent : .white)
-                            .position(position(index, size: size))
-                        }.contentShape(shape)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(state.automaticAction || state.committing != nil)
-                    .onHover { inside in if inside && !state.automaticAction && state.committing == nil { state.selected = command } }
-                    .accessibilityLabel(command.rawValue)
-                    .accessibilityAddTraits(state.selected == command ? [.isSelected] : [])
-                }
-                .opacity(state.committing == nil ? 1 : 0.65)
-                Sector(index: 0)
-                    .stroke(accent.opacity(0.75), lineWidth: 1.5)
-                    .rotationEffect(.degrees(Double(Command.allCases.firstIndex(of: state.selected ?? .playPause) ?? 0) * 360 / Double(Command.allCases.count)))
-                    .allowsHitTesting(false)
-                Circle()
-                    .fill(.black.opacity(reduceTransparency ? 0.5 : 0.07))
-                    .overlay(Circle().stroke(.white.opacity(0.18), lineWidth: 0.7))
-                    .frame(width: size * 0.44, height: size * 0.44)
-                    .allowsHitTesting(false)
-                VStack(spacing: 7) {
-                    if state.automaticAction || state.committing != nil {
-                        Image(systemName: state.committing?.symbol ?? state.selected?.symbol ?? "circle")
-                            .font(.system(size: 28, weight: .light))
-                            .contentTransition(.symbolEffect(.replace))
-                    }
-                    Text(state.selected?.rawValue ?? "TapThatX").font(.system(size: 13, weight: .semibold))
-                    Text(state.committing != nil ? "Selected" : state.automaticAction ? "Selecting…" : "Tap to move · Double to choose\nArrows · Return · Esc")
-                        .font(.system(size: 10)).foregroundStyle(.white.opacity(0.65)).multilineTextAlignment(.center)
-                }.foregroundStyle(.white).allowsHitTesting(false).frame(width: size * 0.4)
-                Circle().stroke(LinearGradient(colors: [.white.opacity(0.7), .white.opacity(0.08), .white.opacity(0.3)],
-                                               startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
-                    .padding(1).allowsHitTesting(false)
-                Circle().stroke(.white.opacity(0.08), lineWidth: 0.5).padding(4).allowsHitTesting(false)
-            }
-            .clipShape(Circle())
-            .preferredColorScheme(.dark)
+            MaterialHost(
+                material: material,
+                interactive: !reduceMotion && !state.automaticAction && state.committing == nil,
+                content: RingContent(state: state, size: geometry.size.width, reduceMotion: reduceMotion))
         }
-        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: state.selected)
-        .scaleEffect(appeared || reduceMotion ? 1 : 0.92)
-        .opacity(appeared ? 1 : 0)
-        .onAppear { withAnimation(reduceMotion ? nil : .spring(response: 0.2, dampingFraction: 0.9)) { appeared = true } }
-    }
-    private func position(_ index: Int, size: Double) -> CGPoint {
-        let angle = (Double(index) * (360 / Double(Command.allCases.count)) - 90) * Double.pi / 180
-        return CGPoint(x: size / 2 + cos(angle) * size * 0.35, y: size / 2 + sin(angle) * size * 0.35)
+        .scaleEffect(reduceMotion ? 1 : !appeared || !state.isPresented ? 0.96 : 1)
+        .opacity(appeared && state.isPresented ? 1 : 0)
+        .animation(reduceMotion ? nil : RingMotion.opening, value: appeared)
+        .animation(reduceMotion ? nil : RingMotion.exit, value: state.isPresented)
+        .onAppear { appeared = true }
     }
 }

@@ -4,6 +4,7 @@ import TapCore
 final class SensorSession: NSObject, SensorService {
     private let reader = SensorReader()
     private var samples: [AccelerationSample] = []
+    private var droppedSamples = 0
     private var lease: Timer?
     private var lastRead = 0.0
 
@@ -11,13 +12,13 @@ final class SensorSession: NSObject, SensorService {
         super.init()
         reader.onSample = { [weak self] sample in
             guard let self else { return }
-            if self.samples.count >= 2048 { self.samples.removeFirst(1024) }
+            if self.samples.count >= 2048 { self.samples.removeFirst(1024); self.droppedSamples += 1024 }
             self.samples.append(sample)
         }
     }
     func start(reply: @escaping (String) -> Void) {
         DispatchQueue.main.async {
-            self.samples.removeAll(); self.reader.start()
+            self.samples.removeAll(); self.droppedSamples = 0; self.reader.start()
             self.lastRead = ProcessInfo.processInfo.systemUptime
             self.lease?.invalidate()
             self.lease = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -31,8 +32,8 @@ final class SensorSession: NSObject, SensorService {
         DispatchQueue.main.async {
             self.lastRead = ProcessInfo.processInfo.systemUptime
             let batch = self.samples; self.samples.removeAll(keepingCapacity: true)
-            do { reply(try JSONEncoder().encode(batch), self.reader.status, self.reader.rejectedReports, self.reader.rate) }
-            catch { reply(Data(), "Sensor encoding failed", self.reader.rejectedReports, self.reader.rate) }
+            do { reply(try JSONEncoder().encode(batch), self.reader.status, self.reader.rejectedReports + self.droppedSamples, self.reader.rate) }
+            catch { reply(Data(), "Sensor encoding failed", self.reader.rejectedReports + self.droppedSamples, self.reader.rate) }
         }
     }
     func stop(reply: @escaping () -> Void) { DispatchQueue.main.async { self.shutdown(); reply() } }

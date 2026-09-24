@@ -12,9 +12,9 @@ struct TapThatXApp: App {
         } label: {
             MenuBarIcon(paused: model.paused)
         }
-        Window("TapThatX · Setup & Diagnostics", id: "setup") {
+        Window("TapThatX Settings", id: "setup") {
             SetupView(model: model).onAppear { delegate.model = model }
-        }.defaultSize(width: 720, height: 800)
+        }.defaultSize(width: 900, height: 660)
     }
 }
 
@@ -66,7 +66,7 @@ private struct MenuContents: View {
         Toggle("Pause recognition", isOn: $model.paused)
         Button("Open command ring") { DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { model.previewRing() } }
         Button("Save last 15 seconds") { model.saveRecentActivity() }
-        Button("Setup & Diagnostics…") { openWindow(id: "setup"); NSApp.activate(ignoringOtherApps: true) }
+        Button("Settings…") { openWindow(id: "setup"); NSApp.activate(ignoringOtherApps: true) }
         Divider()
         Text(model.acknowledgment)
         Button("Quit TapThatX") { model.shutdown(); NSApp.terminate(nil) }.keyboardShortcut("q")

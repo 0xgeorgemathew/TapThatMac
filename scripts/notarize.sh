@@ -1,10 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+if [[ -z "${SIGNING_IDENTITY:-}" && -f scripts/signing.env ]]; then
+  source scripts/signing.env
+fi
 : "${SIGNING_IDENTITY:?Set a Developer ID Application identity}"
 : "${TEAM_ID:?Set TEAM_ID}"
 : "${NOTARY_PROFILE:?Set a notarytool keychain profile}"
-[[ "$SIGNING_IDENTITY" == 'Developer ID Application:'* ]] || { echo 'Developer ID Application signing is required.' >&2; exit 1; }
+[[ "$SIGNING_IDENTITY" == 'Developer ID Application:'* ]] || {
+  echo "Developer ID Application signing is required; got: $SIGNING_IDENTITY" >&2
+  exit 1
+}
 bash scripts/build-app.sh
 app="dist/TapThatX.app"
 codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" --identifier com.tapthatx.sensor.helper "$app/Contents/MacOS/TapSensorHelper"

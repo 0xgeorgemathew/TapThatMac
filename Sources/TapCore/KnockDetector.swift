@@ -44,7 +44,7 @@ private struct PulseDetector {
         let lightTapMode = impulseMode
         // Light contacts need the impulse, not the chassis' long settling tail.
         // A 10 ms high-pass reference removes that tail before detection/rearming.
-        // Preserve the established strong-knock path at its existing thresholds.
+        // Keep the envelope path at its existing thresholds.
         let slow = 1 - exp(-dt / (lightTapMode ? 0.01 : 0.3))
         gravity = (g.0 + slow * (sample.x - g.0), g.1 + slow * (sample.y - g.1), g.2 + slow * (sample.z - g.2))
         let dx = sample.x - g.0, dy = sample.y - g.1, dz = sample.z - g.2
@@ -71,7 +71,7 @@ private struct PulseDetector {
                 // A very sharp impact can have a long settling tail. Confirm its
                 // half-height decay, independent of the user's amplitude floor.
                 // Slower onsets still need the original full threshold crossing:
-                // half-height alone also accepts recorded table shaking.
+                // half-height alone does not establish that motion was an impact.
                 candidateTime = nil
                 if settings.suppressTyping, let key = lastKeyTime, sample.time - key < 0.18 { return false }
                 acceptedOnset = onset
@@ -103,7 +103,7 @@ private struct PulseDetector {
 }
 
 
-/// Combine the established knock envelope with a short impulse path for light
+/// Combine the knock envelope with a short impulse path for light
 /// contacts. Both describe the same physical impacts; coalesce before pairing.
 public struct KnockDetector {
     public var settings = DetectorSettings()

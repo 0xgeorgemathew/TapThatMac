@@ -6,6 +6,9 @@
 
 # Local recordings, investigations and signing configuration
 /diagnostics/
+
+# Generated reports and research artifacts
+/artifacts/
 .env
 .env.*
 *.p12
@@ -13,9 +16,12 @@
 *.mobileprovision
 *.provisionprofile
 
-# Editor and OS state
+# Editor, OS and agent workspace state
 .DS_Store
+.zcode/
 xcuserdata/
 *.xcuserstate
 .idea/
 .vscode/
+
+/scripts/signing.env

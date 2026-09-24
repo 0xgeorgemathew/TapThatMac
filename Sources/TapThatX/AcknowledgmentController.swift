@@ -15,7 +15,7 @@ final class AcknowledgmentController {
         panel.ignoresMouseEvents = true
         panel.contentView = NSHostingView(rootView: Text(message).font(.system(size: 12, weight: .medium))
             .multilineTextAlignment(.center).padding(14).frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14)))
+            .reactorGlass(in: RoundedRectangle(cornerRadius: ReactorTheme.surfaceRadius)))
         self.panel = panel; panel.orderFrontRegardless()
         let token = generation
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in

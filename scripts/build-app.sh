@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+if [[ -z "${SIGNING_IDENTITY:-}" && -f scripts/signing.env ]]; then
+  source scripts/signing.env
+fi
 swift build -c release --arch arm64
 bin_dir="$(swift build -c release --arch arm64 --show-bin-path)"
 mkdir -p dist
@@ -57,3 +60,24 @@ if ! mv "$app" dist/TapThatX.app; then
   exit 1
 fi
 echo "Built dist/TapThatX.app (identity: $identity). Developer ID distribution requires scripts/notarize.sh."
+# Install over the app in /Applications so permission grants tied to the
+# signature and install path stay valid. ditto preserves the metadata cp may not.
+if [[ -n "${SKIP_APP_INSTALL:-}" && "${SKIP_APP_INSTALL}" != "0" ]]; then
+  echo 'Skipping /Applications install (SKIP_APP_INSTALL is set).'
+else
+  osascript -e 'tell application "TapThatX" to quit' >/dev/null 2>&1 || true
+  for _ in {1..20}; do
+    pgrep -x TapThatX >/dev/null || break
+    sleep 0.1
+  done
+  pkill -x TapThatX || true
+  rm -rf /Applications/TapThatX.app
+  ditto dist/TapThatX.app /Applications/TapThatX.app
+  if ! cmp -s dist/TapThatX.app/Contents/MacOS/TapThatX /Applications/TapThatX.app/Contents/MacOS/TapThatX; then
+    echo 'Installed app binary differs from dist/TapThatX.app; install did not complete.' >&2
+    exit 1
+  fi
+  echo "Replaced /Applications/TapThatX.app (identity: $identity)."
+  # Relaunch the replaced app; it is a menu-bar accessory, so `open` starts it without a Dock icon.
+  open /Applications/TapThatX.app
+fi

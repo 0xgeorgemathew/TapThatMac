@@ -1,18 +1,5 @@
 import Foundation
 
-// Decodes the app's export without requiring unrelated machine/session metadata.
-public struct ReplayDataset: Decodable {
-    public let captures: [ReplayCapture]
-}
-public struct ReplayCapture: Decodable {
-    public let label: String
-    public let purpose: String
-    public let simulated: Bool
-    public let samples: [AccelerationSample]
-    public let expectedDoubleKnocks: Int?
-    public let keyTimes: [Double]?
-    public let duration: Double?
-}
 public struct ReplayResult {
     public let knockTimes: [Double]
     public let doubleKnockTimes: [Double]

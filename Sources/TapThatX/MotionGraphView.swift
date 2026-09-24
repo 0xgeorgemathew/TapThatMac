@@ -14,8 +14,9 @@ final class MotionGraphNSView: NSView {
     private var draftThreshold: Double?
     private var backdrop: NSImage?
     private let ceiling = 0.1
-    private let mint = NSColor(calibratedRed: 0.36, green: 0.91, blue: 0.75, alpha: 1)
-    private let amber = NSColor(calibratedRed: 1, green: 0.77, blue: 0.39, alpha: 1)
+    private let reactor = NSColor(calibratedRed: 0.404, green: 0.780, blue: 0.922, alpha: 1)
+    private let gold = NSColor(calibratedRed: 0.851, green: 0.639, blue: 0.255, alpha: 1)
+    private let axisText = NSColor.white.withAlphaComponent(0.45)
     private var plot: NSRect { NSRect(x: 48, y: 36, width: max(1, bounds.width - 68), height: max(1, bounds.height - 82)) }
     override var acceptsFirstResponder: Bool { true }
 
@@ -25,7 +26,7 @@ final class MotionGraphNSView: NSView {
         setAccessibilityElement(true)
         setAccessibilityRole(.slider)
         setAccessibilityLabel("Minimum tap strength")
-        setAccessibilityHelp("Drag the amber line or use arrow keys. Higher values require stronger taps.")
+        setAccessibilityHelp("Drag the gold line or use arrow keys. Higher values require stronger taps.")
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
@@ -41,26 +42,37 @@ final class MotionGraphNSView: NSView {
     private func y(_ amplitude: Double) -> CGFloat {
         plot.minY + min(1, max(0, amplitude / ceiling)) * plot.height
     }
+    // Fonts are cached because monospacedSystemFont was re-resolved on every
+    // frame and a system font-resolution race during appearance changes crashed
+    // CoreText once in testing (TapThatX-2026-09-17-152424.ips).
+    private static let smallFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .medium)
+    private static let labelFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+
     private func text(_ value: String, x: CGFloat, y: CGFloat, color: NSColor, size: CGFloat = 11) {
         (value as NSString).draw(at: NSPoint(x: x, y: y), withAttributes: [
-            .font: NSFont.monospacedSystemFont(ofSize: size, weight: .medium), .foregroundColor: color
+            .font: size < 10 ? Self.smallFont : Self.labelFont, .foregroundColor: color
         ])
     }
     private func drawBackdrop() {
-        NSColor(calibratedRed: 0.035, green: 0.065, blue: 0.075, alpha: 1).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 12, yRadius: 12).fill()
+        let panel = NSBezierPath(roundedRect: bounds, xRadius: 12, yRadius: 12)
+        NSColor(calibratedRed: 0.039, green: 0.094, blue: 0.149, alpha: 1).setFill()
+        panel.fill()
+        NSGradient(colors: [
+            NSColor(calibratedRed: 0.039, green: 0.094, blue: 0.149, alpha: 1),
+            NSColor(calibratedRed: 0.063, green: 0.122, blue: 0.188, alpha: 1)
+        ])?.draw(in: panel, angle: 90)
         let grid = NSBezierPath()
         for index in 0...4 {
             let value = Double(index) * ceiling / 4
             grid.move(to: NSPoint(x: plot.minX, y: y(value)))
             grid.line(to: NSPoint(x: plot.maxX, y: y(value)))
-            text(String(format: "%.3f", value), x: 5, y: y(value) - 6, color: .gray, size: 9)
+            text(String(format: "%.3f", value), x: 5, y: y(value) - 6, color: axisText, size: 9)
         }
         for index in 0...8 {
             let x = plot.minX + Double(index) / 8 * plot.width
             grid.move(to: NSPoint(x: x, y: plot.minY)); grid.line(to: NSPoint(x: x, y: plot.maxY))
         }
-        NSColor.white.withAlphaComponent(0.09).setStroke(); grid.lineWidth = 0.5; grid.stroke()
+        NSColor.white.withAlphaComponent(0.10).setStroke(); grid.lineWidth = 0.5; grid.stroke()
     }
     override func draw(_ dirtyRect: NSRect) {
         guard let model else { return }
@@ -86,21 +98,23 @@ final class MotionGraphNSView: NSView {
             previous = point
         }
         if model.sampleRate < 50 {
-            mint.setFill()
+            reactor.setFill()
             for point in points {
                 let x = plot.maxX - (time - point.time) / 8 * plot.width
                 NSBezierPath(ovalIn: NSRect(x: x - 2, y: y(point.peak) - 2, width: 4, height: 4)).fill()
             }
         }
-        mint.setStroke(); waveform.lineWidth = 1.6; waveform.stroke()
-        NSColor.white.withAlphaComponent(0.4).setStroke()
+        // Static glow: one wider low-alpha pass of the same path under the main stroke.
+        reactor.withAlphaComponent(0.18).setStroke(); waveform.lineWidth = 5; waveform.stroke()
+        reactor.setStroke(); waveform.lineWidth = 1.6; waveform.stroke()
+        gold.withAlphaComponent(0.55).setStroke()
         adaptive.setLineDash([3, 4], count: 2, phase: 0); adaptive.lineWidth = 1; adaptive.stroke()
         let value = draftThreshold ?? model.amplitudeFloor
         let line = NSBezierPath()
         line.move(to: NSPoint(x: plot.minX, y: y(value))); line.line(to: NSPoint(x: plot.maxX, y: y(value)))
-        amber.setStroke(); line.lineWidth = 1.5; line.stroke()
-        amber.setFill(); NSBezierPath(ovalIn: NSRect(x: plot.maxX - 5, y: y(value) - 5, width: 10, height: 10)).fill()
-        text(String(format: "MINIMUM %.4f g  ↕", value), x: plot.minX + 8, y: y(value) + 5, color: amber)
+        gold.setStroke(); line.lineWidth = 1.5; line.stroke()
+        gold.setFill(); NSBezierPath(ovalIn: NSRect(x: plot.maxX - 5, y: y(value) - 5, width: 10, height: 10)).fill()
+        text(String(format: "MINIMUM %.4f g  ↕", value), x: plot.minX + 8, y: y(value) + 5, color: gold)
         let state: String
         if model.paused { state = "PAUSED" }
         else if model.status != "Streaming accelerometer" && model.input != .simulated { state = "WAITING FOR SENSOR" }
@@ -108,11 +122,11 @@ final class MotionGraphNSView: NSView {
         else if model.liveWarmingUp { state = "SETTLING · KEEP STILL" }
         else if let recognized = model.lastDoubleTime, time - recognized < 1.2 { state = "DOUBLE-TAP RECOGNIZED" }
         else { state = "LIVE · TAP TO TRY" }
-        text(state, x: 16, y: bounds.height - 26, color: mint)
+        text(state, x: 16, y: bounds.height - 26, color: reactor)
         text("\(model.knocks) taps · \(model.recognizedPairs) pairs", x: max(220, bounds.width - 215), y: bounds.height - 26, color: .lightGray)
-        text("−8s", x: plot.minX, y: 12, color: .gray)
-        text(points.contains { $0.peak > ceiling } ? "Peak exceeds 0.100 g" : "MOTION (g)", x: plot.minX + 58, y: 12, color: .gray)
-        text("NOW", x: plot.maxX - 24, y: 12, color: .gray)
+        text("−8s", x: plot.minX, y: 12, color: axisText)
+        text(points.contains { $0.peak > ceiling } ? "Peak exceeds 0.100 g" : "MOTION (g)", x: plot.minX + 58, y: 12, color: axisText)
+        text("NOW", x: plot.maxX - 24, y: 12, color: axisText)
     }
 
     override func mouseDown(with event: NSEvent) {

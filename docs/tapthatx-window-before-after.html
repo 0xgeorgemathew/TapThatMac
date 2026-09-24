@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Interactive before/after comparison of the TapThatX settings window shell: current segmented window versus the proposed compact-chrome sidebar window.">
+<title>TapThatX | Settings window — before / after</title>
+<style>
+:root{--bg:#f6f8f7;--surface:#fff;--ink:#182720;--muted:#53635b;--line:#d3ddd7;--accent:#176b50;--soft:#e5f1eb;--radius:14px;color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#131c18;--surface:#1b2721;--ink:#edf3ef;--muted:#acbdb1;--line:#3b4f43;--accent:#7bd7af;--soft:#233e31;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#131c18;--surface:#1b2721;--ink:#edf3ef;--muted:#acbdb1;--line:#3b4f43;--accent:#7bd7af;--soft:#233e31;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:90px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+a{color:var(--accent);text-underline-offset:4px}
+button,select,input{font:inherit}
+button{cursor:pointer;color:inherit}
+button:disabled{cursor:default}
+h1,h2,h3,h4,p{margin:0}
+h1,h2,h3{line-height:1.12;letter-spacing:-.03em}
+h1{font-size:clamp(32px,4vw,52px);max-width:760px}
+h2{font-size:clamp(24px,2.6vw,34px);margin-bottom:16px}
+h3{font-size:20px}
+p{max-width:78ch}
+small{font-size:12px}
+code{font-size:12px;overflow-wrap:anywhere;background:var(--soft);padding:1px 5px;border-radius:4px}
+img{max-width:100%;height:auto}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.shell{max-width:1280px;margin:auto;padding:0 32px}
+.topbar{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
+.topbar .shell{display:flex;justify-content:space-between;align-items:center;gap:20px;min-height:70px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:700;color:var(--ink)}
+.brand .glyph{width:30px;height:30px;border-radius:8px;background:var(--soft);display:grid;place-items:center;color:var(--accent);font-weight:800}
+.topbar nav{display:flex;align-items:center;gap:22px;font-size:13px}
+.topbar nav a{text-decoration:none;color:var(--muted)}
+.skip{position:fixed;top:-100px;left:20px;z-index:30;background:var(--surface);padding:12px}
+.skip:focus{top:12px}
+.eyebrow{font-size:12px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+.hero{padding:60px 0 44px;display:grid;grid-template-columns:1.5fr 1fr;gap:48px;align-items:end}
+.hero p.lead{font-size:19px;color:var(--muted);margin-top:20px}
+.hero-side{border-left:3px solid var(--accent);padding-left:20px;font-size:14px;color:var(--muted)}
+.hero-side strong{color:var(--ink)}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-block:1px solid var(--line)}
+.facts div{background:var(--bg);padding:18px 8px 20px 0}
+.facts b{display:block;font-size:22px;letter-spacing:-.02em}
+.facts span{font-size:12.5px;color:var(--muted)}
+.section{padding:64px 0;border-bottom:1px solid var(--line)}
+.section>.lead{color:var(--muted);font-size:17px;margin-bottom:28px;max-width:90ch}
+.note{background:var(--soft);border-radius:10px;padding:16px 20px;font-size:14px;margin-top:22px;max-width:100ch}
+.controls{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:flex-end;margin-bottom:18px}
+.control{display:grid;gap:7px}
+.control>span{font-size:11.5px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:9px 14px;font-size:13px;min-height:38px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"],.seg button[aria-selected="true"]{background:var(--accent);color:var(--bg);font-weight:600}
+select{padding:9px 12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:9px;min-height:38px}
+.stage{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:22px 18px 8px}
+.stage-head{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;padding:0 6px 14px;font-size:12.5px;color:var(--muted)}
+.stage-head strong{color:var(--ink)}
+.viewport{overflow:hidden;display:flex;justify-content:center}
+.scaler{transform-origin:top center}
+.readout{display:flex;flex-wrap:wrap;gap:8px 26px;padding:14px 6px 16px;font-size:12.5px;color:var(--muted);border-top:1px dashed var(--line);margin-top:14px}
+.readout b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* ---------- window wireframe ---------- */
+.wf{border:1px solid #9aa5a0;border-radius:10px;overflow:hidden;background:#fff;color:#1c2521;font-size:13px;line-height:1.45;box-shadow:0 18px 50px -22px rgba(10,25,18,.45);display:flex;flex-direction:column}
+:root[data-theme="dark"] .wf,:root:not([data-theme="light"]) .wf{}
+.wf-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f2f4f3;border-bottom:1px solid #d8dedb;min-height:40px}
+.lights{display:flex;gap:7px;flex-shrink:0}
+.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.lights i:nth-child(1){background:#ff5f57}.lights i:nth-child(2){background:#febc2e}.lights i:nth-child(3){background:#28c840}
+.wf-title{font-weight:650;font-size:13px;color:#3d4742}
+.wf-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:8px 14px;background:#fbfcfb;border-bottom:1px solid #e2e7e4}
+.wf-toolbar .tb-title{margin-right:auto;font-weight:650;font-size:13px;color:#3d4742}
+.bighead{display:flex;align-items:center;gap:12px;padding:22px 24px;background:#fff;border-bottom:0}
+.bighead .appicon{width:34px;height:34px;border-radius:8px;background:linear-gradient(145deg,#8ee6c4,#176b50);display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px;flex-shrink:0}
+.bighead h4{font-size:22px;font-weight:650;letter-spacing:-.02em}
+.bighead .tag{font-size:13px;color:#5b6a63}
+.wf-switch{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:#3d4742}
+.track{width:38px;height:22px;border-radius:11px;background:#c9d2cd;position:relative;transition:background .15s;border:0;flex-shrink:0}
+.track::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .15s}
+.track[aria-pressed="true"]{background:#176b50}
+.track[aria-pressed="true"]::after{left:18px}
+.wf-tabs{display:flex;gap:2px;padding:0 24px 14px;background:#fff}
+.wf-tabs button{flex:1;border:1px solid #cdd6d1;background:#f7f9f8;border-radius:7px;padding:7px 4px;font-size:12.5px;min-height:32px}
+.wf-tabs button+button{margin-left:4px}
+.wf-tabs button[aria-selected="true"]{background:#e2efe8;border-color:#176b50;color:#0f4f39;font-weight:650}
+.wf-body{flex:1;display:grid;min-height:0}
+.wf-body.rows{grid-template-columns:1fr}
+.wf-split{grid-template-columns:160px 1fr}
+.wf-side{background:#eef2ef;border-right:1px solid #d8dedb;padding:16px 10px;display:flex;flex-direction:column;gap:2px}
+.wf-side .side-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#68756e;padding:0 10px 10px}
+.wf-side button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:transparent;border-radius:7px;padding:8px 10px;font-size:13px;min-height:34px;color:#243029;flex-wrap:wrap}
+.wf-side button .badge{white-space:nowrap;flex-shrink:0;font-size:10px;font-weight:700;color:#8a5a00;background:#fdeed2;border-radius:5px;padding:1px 6px;margin-left:22px}
+.wf-side button[aria-current="true"]{background:#176b50;color:#fff;font-weight:600}
+.wf-side button[aria-current="true"] .badge{background:rgba(255,255,255,.25);color:#fff}
+.wf-content{overflow-y:auto;padding:20px;min-width:0;scroll-behavior:smooth}
+.wf-content section{padding:14px 0 18px;border-bottom:1px solid #e4e9e6;scroll-margin-top:0}
+.wf-content section:last-child{border-bottom:0}
+.wf-content h3{font-size:18px;margin-bottom:4px;letter-spacing:-.01em}
+.wf-content h4{font-size:13px;margin:10px 0 6px;color:#3d4742}
+.wf-content .sub{font-size:12.5px;color:#5b6a63;margin-bottom:12px}
+.jumps{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.jumps a{font-size:12px;color:#176b50;text-decoration:none;border:1px solid #cfe2d7;border-radius:6px;padding:3px 9px;background:#f4faf6}
+.row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:8px 0;flex-wrap:wrap}
+.row .lbl{font-weight:600}
+.row .hint{font-size:11.5px;color:#5b6a63;width:100%}
+.wf-select{border:1px solid #b9c4be;background:#fff;border-radius:6px;padding:5px 8px;font-size:12.5px;max-width:100%}
+.wf-btn{border:1px solid #b9c4be;background:#fff;border-radius:6px;padding:5px 11px;font-size:12.5px;min-height:30px}
+.wf-btn.primary{background:#176b50;border-color:#176b50;color:#fff;font-weight:600;white-space:nowrap}
+.wf-btn:disabled{color:#8b968f;background:#f1f4f2}
+.graph{height:260px;border:1px solid #c9d3cd;border-radius:12px;background:linear-gradient(#fbfdfc,#f2f7f4);position:relative;margin:8px 0;display:flex;align-items:center;justify-content:center}
+.graph span{font-size:11.5px;color:#7a8780;letter-spacing:.04em}
+.graph .thr{position:absolute;left:0;right:0;top:38%;border-top:2px solid #176b50}
+.graph .thr::after{content:"threshold";position:absolute;right:8px;top:-16px;font-size:10px;color:#176b50;background:#e2efe8;padding:0 5px;border-radius:3px}
+.card{border:1px solid #dce3df;border-radius:12px;background:#f8faf9;padding:14px 16px;margin:10px 0}
+.card .ok{color:#0f7a52;font-weight:650}
+.card .miss{color:#8a5a00;font-weight:650}
+.mono{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px}
+.ev{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:#3d4742;padding:2px 0}
+.banner{border:1px solid #e3c98a;background:#fdf6e3;border-radius:8px;padding:10px 14px;font-size:12.5px;margin-bottom:12px}
+.wf-foot{display:flex;align-items:flex-start;gap:16px;padding:14px 20px;border-top:1px solid #d8dedb;background:#f7f9f8}
+.wf-foot .status{display:grid;gap:3px;min-width:0}
+.wf-foot .status b{font-size:12.5px}
+.wf-foot .status small{font-size:11px;color:#5b6a63;overflow-wrap:anywhere}
+.wf-foot .grow{flex:1}
+.reason{font-size:11px;color:#8a5a00;padding-top:2px}
+
+/* mapping chips */
+.chips{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 4px}
+.chips button{border:1px dashed var(--accent);background:transparent;color:var(--accent);border-radius:8px;padding:8px 13px;font-size:13px;min-height:38px}
+.chips button:hover{background:var(--soft)}
+.chips small{display:block;text-align:left;color:var(--muted);font-size:11px;margin-top:2px}
+@keyframes flash{0%{background:#fff3d6}100%{background:transparent}}
+.wf-content section.flash{animation:flash 1.4s ease-out 1}
+@media(prefers-reduced-motion:reduce){.wf-content section.flash{animation:none}.wf-content{scroll-behavior:auto}html{scroll-behavior:auto}}
+
+/* mapping table */
+.tablewrap{overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;text-align:left}
+th{color:var(--muted);font-size:12px;font-weight:600;padding:12px 14px;background:var(--soft)}
+td{padding:14px;border-bottom:1px solid var(--line);vertical-align:top}
+td p{margin-top:4px;font-size:13px;color:var(--muted)}
+td:first-child{font-weight:600;width:24%}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+.grid2 h3{margin-bottom:12px}
+ul.plain{margin:0;padding-left:20px;font-size:14px}
+ul.plain li{margin:9px 0}
+.consult{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:28px}
+.consult blockquote{margin:18px 0 0;padding:16px 20px;border-left:3px solid var(--accent);background:var(--soft);font-size:15px}
+.consult-meta{font-size:12.5px;color:var(--muted);margin-top:16px}
+.open-q{margin-top:22px;display:grid;gap:10px}
+.open-q div{border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-size:14px}
+.spec-table td:first-child{width:30%}
+.checklist{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:8px 28px;font-size:14px}
+.checklist li{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed var(--line)}
+.checklist input{margin-top:4px;accent-color:var(--accent)}
+footer{padding:30px 0 48px;color:var(--muted);font-size:13px}
+.noscript-note{background:var(--soft);padding:18px;border-radius:10px;margin:20px 0}
+[hidden]{display:none!important}
+
+@media(max-width:1000px){.shell{padding:0 22px}.hero{grid-template-columns:1fr;gap:24px;padding:44px 0 36px}.facts{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.checklist{grid-template-columns:1fr}.topbar nav a{display:none}}
+@media(max-width:620px){.shell{padding:0 16px}.seg button{padding:8px 10px;font-size:12px}}
+@media print{
+  html{scroll-behavior:auto}
+  body{background:#fff;color:#182720;font-size:12px}
+  .topbar,.controls,.chips,footer,.noscript-note{display:none!important}
+  .stage{border:0;padding:0;background:#fff}
+  .viewport{display:block;overflow:visible}
+  .scaler{transform:scale(.56)!important;transform-origin:top left;margin-bottom:-260px}
+  .section{padding:24px 0}
+  .wf[hidden]{display:flex!important}
+  .stage-head{display:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar"><div class="shell">
+  <a class="brand" href="#main"><span class="glyph">⌁</span>TapThatX <span style="font-weight:400;color:var(--muted)">/ Settings window</span></a>
+  <nav aria-label="Document"><a href="#compare">Compare</a><a href="#mapping">Mapping</a><a href="#decisions">Decisions</a><a href="#consult">Consult</a><button id="theme" aria-label="Switch color theme" style="border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 12px;font-size:12.5px;min-height:36px">Appearance</button></nav>
+</div></header>
+
+<main id="main" class="shell">
+
+<section class="hero">
+  <div>
+    <div class="eyebrow">Window shell design · before / after · 14 September 2026</div>
+    <h1>One settings window, rebuilt around a sidebar.</h1>
+    <p class="lead">The current window puts five segmented tabs under a large custom header. The proposed window drops the header, moves Pause into a toolbar, and navigates with four sidebar areas — <strong>ChatGPT, Connection, Tap setup, Activity</strong> — over a pinned full-width footer.</p>
+  </div>
+  <div class="hero-side">
+    <strong>Scope: the window shell only.</strong><br>
+    Navigation structure, layout, sizing and chrome. The command ring, the approval companion panel, sensor detection and the ChatGPT adapter are documented elsewhere and deliberately excluded.
+    <p style="margin-top:12px">Grounded in <code>Sources/TapThatX/SetupView.swift</code>, <code>TapThatXApp.swift</code>, <code>PermissionSetupView.swift</code>, the ChatGPT-mode proposal of 12 September, and an Astra design consult of 14 September 2026.</p>
+  </div>
+</section>
+
+<div class="facts">
+  <div><b>5 → 4</b><span>segmented tabs → sidebar areas, nothing deleted</span></div>
+  <div><b>720×640</b><span>minimum size kept; ideal grows to 840×760</span></div>
+  <div><b>≈519 pt</b><span>usable page width at minimum with a 160 pt sidebar</span></div>
+  <div><b>0 → 2</b><span>chrome rows removed; footer stays pinned</span></div>
+</div>
+
+<section class="section" id="compare">
+  <h2>Compare the shells yourself.</h2>
+  <p class="lead">Three views separate the two changes: removing the header chrome, and switching navigation. Switch views, sizes, sidebar width and app state; click the old section names to see where they land. Everything below is a demo HTML wireframe built from the source layout — not a native screenshot.</p>
+
+  <div class="controls">
+    <div class="control" role="group" aria-label="Shell view"><span>View</span>
+      <div class="seg" id="view-seg">
+        <button data-view="current" aria-pressed="true">Current</button>
+        <button data-view="segments" aria-pressed="false">Compact + segments</button>
+        <button data-view="sidebar" aria-pressed="false">Compact + sidebar</button>
+      </div>
+    </div>
+    <div class="control"><span>Window size</span>
+      <select id="size" aria-label="Window size">
+        <option value="720x640">720 × 640 · proposed minimum</option>
+        <option value="720x800" selected>720 × 800 · current default</option>
+        <option value="760x800">760 × 800 · review fixture</option>
+        <option value="840x760">840 × 760 · proposed ideal</option>
+      </select>
+    </div>
+    <div class="control" id="sidebar-ctl" hidden><span>Sidebar width</span>
+      <div class="seg" id="side-seg">
+        <button data-side="140" aria-pressed="false">140 pt</button>
+        <button data-side="160" aria-pressed="true">160 pt</button>
+      </div>
+    </div>
+    <div class="control"><span>App state</span>
+      <select id="state" aria-label="App state">
+        <option value="ready" selected>Ready</option>
+        <option value="paused">Manually paused</option>
+        <option value="recording">Recording</option>
+        <option value="permission">Permission missing</option>
+        <option value="disconnected">Sensor disconnected</option>
+        <option value="longack">Long acknowledgment</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="chips" id="legacy-chips" hidden aria-label="Where do the current sections go?">
+    <span style="align-self:center;font-size:12.5px;color:var(--muted);font-weight:600">Old section → new home:</span>
+    <button data-map="permissions">Permissions <small>Connection → Permissions</small></button>
+    <button data-map="tuning">Tuning <small>Tap setup → Tap sensitivity</small></button>
+    <button data-map="actions">Actions <small>Tap setup → Double-tap action</small></button>
+    <button data-map="recordings">Recordings <small>Activity → Calibration recordings</small></button>
+    <button data-map="advanced">Advanced <small>splits: Connection + Activity</small></button>
+  </div>
+
+  <div class="stage">
+    <div class="stage-head">
+      <span id="stage-label"><strong>Current window</strong> · segmented tabs under a large header</span>
+      <span id="stage-scale">shown at 100%</span>
+    </div>
+    <div class="viewport" id="viewport">
+      <div class="scaler" id="scaler">
+
+        <!-- ============ VIEW 1: CURRENT ============ -->
+        <div class="wf" id="win-current" data-view-window="current" role="tabpanel" aria-label="Current window">
+          <div class="wf-bar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="wf-title">TapThatX · Setup &amp; Diagnostics</span></div>
+          <div class="bighead">
+            <span class="appicon" aria-hidden="true">⌁</span>
+            <div><h4>TapThatX</h4><span class="tag">Make a small tap count.</span></div>
+            <div style="margin-left:auto" class="wf-switch"><span>Pause</span><button class="track" data-pause aria-pressed="false" aria-label="Pause recognition"></button></div>
+          </div>
+          <div class="wf-tabs" role="tablist" aria-label="Settings section" data-tabs="current">
+            <button role="tab" data-pane="permissions">Permissions</button>
+            <button role="tab" data-pane="tuning" aria-selected="true">Tuning</button>
+            <button role="tab" data-pane="actions">Actions</button>
+            <button role="tab" data-pane="recordings">Recordings</button>
+            <button role="tab" data-pane="advanced">Advanced</button>
+          </div>
+          <div class="wf-body rows"><div class="wf-content" data-content="current">
+            <div data-pane-box="permissions" hidden><section>
+              <h3>A small setup. Then just tap.</h3>
+              <p class="sub">Keep TapThatX in Applications before granting access. Approve each permission in System Settings, then return here. Actions stay paused while this window is open.</p>
+              <div class="card"><div class="row"><span class="lbl">Accessibility</span><span class="ok" data-perm-ok hidden>Allowed</span><span class="miss" data-perm-miss>Needs access</span></div><p class="hint">Lets your chosen gestures lock the Mac, control media and activate app controls.</p><button class="wf-btn" data-perm-btn>Allow Accessibility…</button></div>
+              <div class="card"><div class="row"><span class="lbl">Input Monitoring</span><span class="ok">Allowed</span></div><p class="hint">Helps ignore vibrations while you type. Key timing only; never records what you type.</p></div>
+              <p class="hint">macOS requires you to switch these permissions on yourself.</p>
+              <button class="wf-btn">Check permissions again</button>
+              <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">Installing a shared build</summary><p class="hint" style="margin-top:8px">Copy TapThatX to Applications. If macOS blocks its first launch, try Privacy &amp; Security → Open Anyway…</p></details>
+            </section></div>
+            <div data-pane-box="tuning"><section>
+              <h3>Find your tap</h3>
+              <p class="sub">Tap twice while watching the signal. Actions stay paused while settings are open.</p>
+              <div class="row"><span>Streaming accelerometer</span><span class="mono">800.0 Hz received</span></div>
+              <div class="graph" aria-label="Motion graph placeholder"><span>Motion graph · 260 pt high</span><i class="thr"></i></div>
+              <div class="row"><span class="mono">Threshold 0.018 g</span><span><button class="wf-btn">Try light taps</button> <button class="wf-btn">Reset</button></span></div>
+              <p class="hint">Drag the solid line above everyday movement. Lower it gradually for lighter taps.</p>
+              <hr style="border:0;border-top:1px solid #e4e9e6">
+              <div class="row"><span class="lbl">Sampling rate</span><select class="wf-select"><option>800 Hz (baseline)</option><option>200 Hz (experimental)</option><option>25 Hz (recording only)</option></select></div>
+              <div class="row"><span class="lbl">Ignore impacts near typing</span><button class="track" aria-pressed="true" aria-label="Ignore impacts near typing"></button></div>
+            </section></div>
+            <div data-pane-box="actions" hidden><section>
+              <h3>Double-tap action</h3>
+              <p class="sub">Choose one action, or open the ring to choose each time.</p>
+              <div class="row"><span class="lbl">Double-tap</span><select class="wf-select"><option>Ring</option><option>Lock Mac</option><option>Play / Pause</option><option>ChatGPT · Experimental</option></select></div>
+              <p class="hint">Double-tap opens all actions. Single tap moves clockwise; double-tap chooses the highlighted action. Right / Down and Left / Up cycle and wrap. Return chooses; Escape cancels.</p>
+              <p class="hint">✦ ChatGPT controls · Experimental — requires a matching control in ChatGPT.</p>
+              <hr style="border:0;border-top:1px solid #e4e9e6">
+              <div class="row"><span class="lbl">Enable system actions</span><button class="track" aria-pressed="true" aria-label="Enable system actions"></button></div>
+              <button class="wf-btn">Preview ring</button>
+            </section></div>
+            <div data-pane-box="recordings" hidden><section>
+              <h3>Build your baseline</h3>
+              <p class="sub">Each recording lasts 15 seconds. Keep still for 3 seconds, perform the labeled activity, then let the desk settle.</p>
+              <div class="row"><span class="lbl">Activity</span><select class="wf-select"><option>Desk double taps</option><option>Typing</option><option>Quiet interval</option></select></div>
+              <div class="row"><span class="lbl">Dataset</span><select class="wf-select"><option>Calibration</option><option>Verification</option></select></div>
+              <div class="row"><span>Intended double-taps: 1</span><span><button class="wf-btn">−</button> <button class="wf-btn">+</button></span></div>
+              <div class="row"><button class="wf-btn" data-record>Record 15 seconds</button><button class="wf-btn" data-save>Save dataset</button></div>
+              <div class="card" data-empty-list><p class="hint" style="margin:0">No recordings this session</p></div>
+              <div data-list hidden>
+                <div class="row"><span class="lbl">Desk double taps<br><small style="font-weight:400;color:#5b6a63">Calibration • 12,000 samples</small></span><span class="mono">1 intended</span></div>
+                <div class="row"><span class="lbl">Quiet interval<br><small style="font-weight:400;color:#5b6a63">Calibration • 12,000 samples</small></span><span class="mono">0 intended</span></div>
+              </div>
+              <p class="hint">Saved locally in Library/Application Support/TapThatX/. Saving replaces the prior dataset. No characters or uploads.</p>
+            </section></div>
+            <div data-pane-box="advanced" hidden><section>
+              <h3>Connection &amp; diagnostics</h3>
+              <div class="row"><span class="lbl">Input</span><select class="wf-select"><option>Direct sensor</option><option>Sensor helper</option><option>Simulated</option></select></div>
+              <div class="row"><span data-adv-status>Streaming accelerometer</span><button class="wf-btn">Reconnect</button></div>
+              <hr style="border:0;border-top:1px solid #e4e9e6">
+              <button class="wf-btn">Manage permissions</button>
+              <hr style="border:0;border-top:1px solid #e4e9e6">
+              <div class="row"><span><button class="wf-btn">Missed tap</button> <button class="wf-btn">False trigger</button></span><span><button class="wf-btn">Export…</button> <button class="wf-btn">Clear log</button></span></div>
+              <div data-events><div class="ev">14:02:33.12  tap: double · balanced</div><div class="ev">14:03:10.04  mark: Missed tap; Balanced</div><div class="ev">14:05:44.51  adapter: Activated ChatGPT</div></div>
+            </section></div>
+          </div></div>
+          <div class="wf-foot"><div class="status"><b data-foot-status>Ready for a double-tap</b><small data-foot-ack>Your next recognized double-tap opens the command ring.</small></div><div class="grow"></div><span class="reason" data-foot-reason hidden></span><button class="wf-btn primary" data-close>Enable &amp; close</button></div>
+        </div>
+
+        <!-- ============ VIEW 2: COMPACT + SEGMENTS ============ -->
+        <div class="wf" id="win-segments" data-view-window="segments" role="tabpanel" aria-label="Compact chrome with segmented tabs" hidden>
+          <div class="wf-bar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="wf-title">TapThatX Settings</span></div>
+          <div class="wf-toolbar"><span class="tb-title"></span><span class="wf-switch"><span>Pause recognition</span><button class="track" data-pause aria-pressed="false" aria-label="Pause recognition"></button></span></div>
+          <div class="wf-tabs" role="tablist" aria-label="Settings section" data-tabs="segments">
+            <button role="tab" data-pane="permissions">Permissions</button>
+            <button role="tab" data-pane="tuning" aria-selected="true">Tuning</button>
+            <button role="tab" data-pane="actions">Actions</button>
+            <button role="tab" data-pane="recordings">Recordings</button>
+            <button role="tab" data-pane="advanced">Advanced</button>
+          </div>
+          <div class="wf-body rows"><div class="wf-content" data-content="segments">
+            <div data-pane-box="permissions" hidden><section>
+              <h3>Permissions</h3>
+              <p class="sub">Same content as the current Permissions page: two permission cards, manual recheck, sensor note and the shared-build disclosure.</p>
+              <div class="card"><div class="row"><span class="lbl">Accessibility</span><span class="ok" data-perm-ok hidden>Allowed</span><span class="miss" data-perm-miss>Needs access</span></div><button class="wf-btn" data-perm-btn>Allow Accessibility…</button></div>
+              <div class="card"><div class="row"><span class="lbl">Input Monitoring</span><span class="ok">Allowed</span></div></div>
+              <button class="wf-btn">Check permissions again</button>
+            </section></div>
+            <div data-pane-box="tuning"><section>
+              <h3>Find your tap</h3>
+              <p class="sub">Identical page content; only the chrome above changed.</p>
+              <div class="row"><span>Streaming accelerometer</span><span class="mono">800.0 Hz received</span></div>
+              <div class="graph" aria-label="Motion graph placeholder"><span>Motion graph · 260 pt high</span><i class="thr"></i></div>
+              <div class="row"><span class="mono">Threshold 0.018 g</span><span><button class="wf-btn">Try light taps</button> <button class="wf-btn">Reset</button></span></div>
+              <div class="row"><span class="lbl">Sampling rate</span><select class="wf-select"><option>800 Hz (baseline)</option></select></div>
+            </section></div>
+            <div data-pane-box="actions" hidden><section>
+              <h3>Double-tap action</h3>
+              <div class="row"><span class="lbl">Double-tap</span><select class="wf-select"><option>Ring</option></select></div>
+              <div class="row"><span class="lbl">Enable system actions</span><button class="track" aria-pressed="true" aria-label="Enable system actions"></button></div>
+              <button class="wf-btn">Preview ring</button>
+            </section></div>
+            <div data-pane-box="recordings" hidden><section>
+              <h3>Build your baseline</h3>
+              <div class="row"><button class="wf-btn" data-record>Record 15 seconds</button><button class="wf-btn" data-save>Save dataset</button></div>
+              <div class="card"><p class="hint" style="margin:0">No recordings this session</p></div>
+            </section></div>
+            <div data-pane-box="advanced" hidden><section>
+              <h3>Connection &amp; diagnostics</h3>
+              <div class="row"><span class="lbl">Input</span><select class="wf-select"><option>Direct sensor</option></select></div>
+              <div class="row"><span data-adv-status>Streaming accelerometer</span><button class="wf-btn">Reconnect</button></div>
+              <div class="row"><span><button class="wf-btn">Missed tap</button> <button class="wf-btn">False trigger</button></span><span><button class="wf-btn">Export…</button></span></div>
+              <div data-events><div class="ev">14:02:33.12  tap: double · balanced</div></div>
+            </section></div>
+          </div></div>
+          <div class="wf-foot"><div class="status"><b data-foot-status>Ready for a double-tap</b><small data-foot-ack>Your next recognized double-tap opens the command ring.</small></div><div class="grow"></div><span class="reason" data-foot-reason hidden></span><button class="wf-btn primary" data-close>Enable &amp; close</button></div>
+        </div>
+
+        <!-- ============ VIEW 3: COMPACT + SIDEBAR ============ -->
+        <div class="wf" id="win-sidebar" data-view-window="sidebar" role="tabpanel" aria-label="Compact chrome with sidebar" hidden>
+          <div class="wf-bar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="wf-title">TapThatX Settings</span></div>
+          <div class="wf-toolbar"><span class="tb-title"></span><span class="wf-switch"><span>Pause recognition</span><button class="track" data-pause aria-pressed="false" aria-label="Pause recognition"></button></span></div>
+          <div class="wf-body wf-split">
+            <nav class="wf-side" aria-label="Settings areas">
+              <span class="side-label">TapThatX</span>
+              <button data-area="chatgpt" aria-current="false"><span aria-hidden="true">✦</span>ChatGPT</button>
+              <button data-area="connection" aria-current="true"><span aria-hidden="true">⌁</span>Connection <span class="badge" data-side-badge hidden>Needs access</span></button>
+              <button data-area="tapsetup" aria-current="false"><span aria-hidden="true">〜</span>Tap setup</button>
+              <button data-area="activity" aria-current="false"><span aria-hidden="true">≡</span>Activity</button>
+            </nav>
+            <div class="wf-content" data-content="sidebar">
+              <div data-pane-box="chatgpt" hidden><section>
+                <h3>ChatGPT</h3>
+                <p class="sub">Approve the request you're reviewing.</p>
+                <div class="row"><span class="lbl">Mode</span><select class="wf-select"><option>ChatGPT · selected</option><option>Ring</option><option>Lock Mac</option></select></div>
+                <h4>Connection state</h4>
+                <div class="row"><span>ChatGPT desktop detected</span><span class="ok">Verified</span></div>
+                <p class="hint">Approval support verified for this example. Manage detection in Connection.</p>
+                <h4>Actions in this mode</h4>
+                <div class="row"><span class="lbl">Approve once</span><small>Double-tap</small></div>
+                <div class="row"><span class="lbl">Decline</span><small>On-screen button</small></div>
+                <div class="row"><span class="lbl">Open request</span><small>On-screen button</small></div>
+                <p class="hint">Only the selected request. No request waiting? Tapping has no action. Try your taps in setup without approving anything.</p>
+              </section></div>
+              <div data-pane-box="connection"><section id="sec-permissions">
+                <div class="jumps"><a href="#sec-permissions">Permissions</a><a href="#sec-sensor">Sensor connection</a><a href="#sec-chatgpt-conn">ChatGPT connection</a></div>
+                <h3>Permissions</h3>
+                <p class="sub">First section of Connection, so first-run routing still lands on permissions — now by selecting the Connection area.</p>
+                <div class="card"><div class="row"><span class="lbl">Accessibility</span><span class="ok" data-perm-ok hidden>Allowed</span><span class="miss" data-perm-miss>Needs access</span></div><p class="hint">Lets your chosen gestures lock the Mac, control media and activate app controls.</p><button class="wf-btn" data-perm-btn>Allow Accessibility…</button></div>
+                <div class="card"><div class="row"><span class="lbl">Input Monitoring</span><span class="ok">Allowed</span></div><p class="hint">Key timing only; never records what you type.</p></div>
+                <button class="wf-btn">Check permissions again</button>
+              </section>
+              <section id="sec-sensor">
+                <h3>Sensor connection</h3>
+                <p class="sub">The sensor half of the old Advanced page, separated from permissions and from ChatGPT.</p>
+                <div class="row"><span class="lbl">Input</span><select class="wf-select"><option>Direct sensor</option><option>Sensor helper</option><option>Simulated</option></select></div>
+                <div class="row"><span data-adv-status>Streaming accelerometer</span><button class="wf-btn">Reconnect</button></div>
+                <p class="hint">Shared ad-hoc builds use direct access; the authenticated helper requires an Apple-signed build.</p>
+              </section>
+              <section id="sec-chatgpt-conn">
+                <h3>ChatGPT connection</h3>
+                <div class="row"><span>ChatGPT desktop detected</span><span class="ok">Version 26.903</span></div>
+                <p class="hint">“App detected” is different from “Approval available”. Run the harmless test request from the ChatGPT area.</p>
+              </section></div>
+              <div data-pane-box="tapsetup" hidden><section id="sec-sensitivity">
+                <div class="jumps"><a href="#sec-sensitivity">Tap sensitivity</a><a href="#sec-action">Double-tap action</a></div>
+                <h3>Tap sensitivity</h3>
+                <p class="sub">Default content of Tap setup — the old Tuning page, graph first.</p>
+                <div class="row"><span>Streaming accelerometer</span><span class="mono">800.0 Hz received</span></div>
+                <div class="graph" aria-label="Motion graph placeholder"><span>Motion graph · 260 pt high · full width</span><i class="thr"></i></div>
+                <div class="row"><span class="mono">Threshold 0.0175 g</span><span><button class="wf-btn">Try light taps</button> <button class="wf-btn">Reset</button></span></div>
+                <div class="row"><span class="lbl">Sampling rate</span><select class="wf-select"><option>800 Hz (baseline)</option></select></div>
+                <div class="row"><span class="lbl">Ignore impacts near typing</span><button class="track" aria-pressed="true" aria-label="Ignore impacts near typing"></button></div>
+              </section>
+              <section id="sec-action">
+                <h3>Double-tap action</h3>
+                <p class="sub">The old Actions page lives one jump-link away — all choices and controls preserved.</p>
+                <div class="row"><span class="lbl">Double-tap</span><select class="wf-select"><option>Ring</option><option>Lock Mac</option><option>Play / Pause</option><option>ChatGPT · Experimental</option></select></div>
+                <p class="hint">Double-tap opens all actions. Single tap moves clockwise; double-tap chooses. Return chooses; Escape cancels.</p>
+                <div class="row"><span class="lbl">Enable system actions</span><button class="track" aria-pressed="true" aria-label="Enable system actions"></button></div>
+                <button class="wf-btn">Preview ring</button>
+              </section></div>
+              <div data-pane-box="activity" hidden><section id="sec-recordings">
+                <div class="jumps"><a href="#sec-recordings">Calibration recordings</a><a href="#sec-diagnostics">Diagnostics</a></div>
+                <h3>Calibration recordings</h3>
+                <p class="sub">Explicit heading and top-of-page jump, so “Activity” does not hide recordings behind a log.</p>
+                <div class="row"><span class="lbl">Activity</span><select class="wf-select"><option>Desk double taps</option></select></div>
+                <div class="row"><button class="wf-btn" data-record>Record 15 seconds</button><button class="wf-btn" data-save>Save dataset</button></div>
+                <div data-list>
+                  <div class="row"><span class="lbl">Desk double taps<br><small style="font-weight:400;color:#5b6a63">Calibration • 12,000 samples</small></span><span class="mono">1 intended</span></div>
+                  <div class="row"><span class="lbl">Quiet interval<br><small style="font-weight:400;color:#5b6a63">Calibration • 12,000 samples</small></span><span class="mono">0 intended</span></div>
+                </div>
+                <p class="hint">Saved locally. Saving replaces the prior dataset. Recordings do not train the detector automatically.</p>
+              </section>
+              <section id="sec-diagnostics">
+                <h3>Diagnostics</h3>
+                <p class="sub">The feedback half of the old Advanced page.</p>
+                <div class="row"><span><button class="wf-btn">Missed tap</button> <button class="wf-btn">False trigger</button></span><span><button class="wf-btn">Save last 15 seconds</button></span></div>
+                <div class="row"><span><button class="wf-btn">Export…</button> <button class="wf-btn">Clear log</button></span></div>
+                <div data-events><div class="ev">14:02:33.12  tap: double · balanced</div><div class="ev">14:03:10.04  mark: Missed tap; Balanced</div><div class="ev">14:05:44.51  adapter: Activated ChatGPT</div></div>
+              </section></div>
+            </div>
+          </div>
+          <div class="wf-foot"><div class="status"><b data-foot-status>Ready for a double-tap</b><small data-foot-ack>Your next recognized double-tap opens the command ring.</small></div><div class="grow"></div><span class="reason" data-foot-reason hidden></span><button class="wf-btn primary" data-close>Enable &amp; close</button></div>
+        </div>
+
+      </div>
+    </div>
+    <div class="readout">
+      <span>Window <b id="ro-size">720 × 800 pt</b></span>
+      <span>Navigation <b id="ro-nav">5 segmented tabs</b></span>
+      <span>Usable page width <b id="ro-width">672 pt</b> <span id="ro-formula">(720 − 2 × 24 content padding)</span></span>
+    </div>
+  </div>
+  <noscript><div class="noscript-note"><strong>JavaScript is off.</strong> The current window is shown in the Ready state. Use the two design documents and the consult record linked at the end for the full comparison.</div></noscript>
+</section>
+
+<section class="section" id="mapping">
+  <h2>Nothing is deleted; everything is re-homed.</h2>
+  <p class="lead">Five sections fold into four areas. The weak points are Actions and Recordings — “Tap setup” can read as sensitivity-only and “Activity” as history-only — so both get explicit headings and jump links at the top of their pages. If users cannot find them, the fix is a fifth sidebar destination, not hidden disclosures.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Current content</th><th>Proposed destination</th><th>Discoverability requirement</th></tr></thead>
+    <tbody>
+      <tr><td>Permissions</td><td>Connection → Permissions <p>first section</p></td><td>Always expanded; sidebar shows a <em>Needs access</em> badge when applicable.</td></tr>
+      <tr><td>Tuning</td><td>Tap setup → Tap sensitivity</td><td>Default content of Tap setup; the graph stays immediately visible.</td></tr>
+      <tr><td>Actions</td><td>Tap setup → Double-tap action</td><td>Visible jump link at the top of Tap setup. All existing choices and controls preserved.</td></tr>
+      <tr><td>Recordings</td><td>Activity → Calibration recordings</td><td>Explicit heading and top-of-page jump; cross-linked from Tap setup.</td></tr>
+      <tr><td>Advanced — input, reconnect, simulation, helper</td><td>Connection → Sensor connection</td><td>Kept distinct from macOS permissions and from the ChatGPT connection check.</td></tr>
+      <tr><td>Advanced — markers, events, export, clear log</td><td>Activity → Diagnostics</td><td>Diagnostic export stays separate from dataset saving.</td></tr>
+      <tr><td>New — ChatGPT configuration</td><td>ChatGPT</td><td>Mode-specific settings plus a link to Connection; does not duplicate the global action selector.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note"><strong>First-run routing survives.</strong> Today the window switches to the Permissions page when Accessibility or Input Monitoring is missing (<code>SetupView.swift:55</code>). The proposal selects <strong>Connection</strong> instead, positioned at its Permissions section — the same landing, one level up. The current code does not lock navigation or disable closing for missing permissions; that distinction is preserved.</div>
+</section>
+
+<section class="section" id="decisions">
+  <h2>Chrome and sizing decisions.</h2>
+  <p class="lead">Header removal and sidebar navigation are separate decisions — that is why the middle view exists. The footer is pinned under both columns so status and “Enable &amp; close” never move between pages.</p>
+  <div class="grid2">
+    <div>
+      <h3>Window chrome</h3>
+      <ul class="plain">
+        <li><strong>Drop the large header.</strong> App icon, title and tagline consume ~90 pt of height on every page. The native title “TapThatX Settings” and standard traffic lights replace them.</li>
+        <li><strong>Pause recognition moves to the toolbar's trailing edge</strong> as a labeled, persistent toggle. Manual pause stays distinct from “actions paused while Settings is open”.</li>
+        <li><strong>Keep a full-width pinned footer:</strong> status and latest acknowledgment left, <em>Enable &amp; close</em> right, with an explicit reason whenever the button is unavailable. The footer grows for long messages instead of truncating them.</li>
+        <li><strong>Keep the button's wording.</strong> It clears calibration mode, enables actions and closes the window — more than dismissal (<code>AppModel.swift:117</code>). All current disabled conditions carry over: recording, manual pause, simulated input, sampling below 50 Hz. Ordinary window closing stays different from Enable &amp; close.</li>
+        <li><strong>Build with a two-column <code>NavigationSplitView</code></strong> and native sidebar selection; a custom sidebar only if a demonstrated macOS 14 constraint blocks the layout.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Sizing</h3>
+      <div class="tablewrap"><table class="spec-table">
+        <thead><tr><th>Property</th><th>Target</th></tr></thead>
+        <tbody>
+          <tr><td>Minimum</td><td>720 × 640 pt</td></tr>
+          <tr><td>Initial / ideal</td><td>840 × 760 pt</td></tr>
+          <tr><td>Sidebar</td><td>160 pt preferred · compare 140</td></tr>
+          <tr><td>Detail padding</td><td>20 pt horizontal</td></tr>
+          <tr><td>Graph</td><td>full available width · 260 pt height</td></tr>
+          <tr><td>Resizing</td><td>both axes; remember size and position</td></tr>
+          <tr><td>Scrolling</td><td>detail scrolls; toolbar, nav and footer stay pinned</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note" style="margin-top:18px"><strong>The width math.</strong> At 720 pt with a 160 pt sidebar, a 1 pt divider and 2 × 20 pt padding, usable page width is ≈ <strong>519 pt</strong> (≈ 539 pt with 140 pt). The graph is 260 pt <em>high</em>, not wide — the fixed control rows are the real width risk. At minimum size, readouts stack, threshold buttons wrap to a second row, and lower controls scroll; the graph keeps its height. No horizontal scrolling, no smaller type. If ~519 pt proves inadequate in a native render, retain segments at 720 pt rather than shrinking content.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="consult">
+  <h2>What Astra said.</h2>
+  <p class="lead">A design consultation on the window shell only, run on 14 September 2026 against this checkout. Read-only; the model inspected the window code, the proposal and the earlier navigation decision before answering.</p>
+  <div class="consult">
+    <blockquote>Recommend a sidebar for the proposed expanded window, conditionally on preserving discoverability and passing the 720 × 640 layout comparison. Keep segmented navigation as the implementation baseline until that comparison succeeds. Five existing sections alone do not justify replacing it.</blockquote>
+    <p style="margin-top:18px">The conditions that would reverse the sidebar call: essential destinations become difficult to find, minimum-width controls clip, or fitting the sidebar requires shrinking text or the graph. The choice also tracks product scope — sidebar if the expanded ChatGPT experience ships, compact segmented shell if ChatGPT remains one action among several. The earlier review's safeguard (“prototype a sidebar separately at 720 × 640”) still applies; the proposal's HTML wireframe does not prove native minimum-size fit.</p>
+    <div class="grid2" style="margin-top:24px">
+      <div>
+        <h3>Adopted in this document</h3>
+        <ul class="plain">
+          <li>Three-view comparison separating chrome removal from navigation.</li>
+          <li>The section mapping table above, including the Connection-first permissions landing.</li>
+          <li>Pinned full-width footer; Pause in the toolbar; native title.</li>
+          <li>Sizing table and the ≈519 pt usable-width figure.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Open decisions for you</h3>
+        <div class="open-q">
+          <div>Is ChatGPT becoming the primary product experience, or staying one capability among existing actions?</div>
+          <div>Is an initial width of 840 pt acceptable while keeping a usable 720 pt minimum?</div>
+          <div>Are the four area names fixed, or may Actions / Recordings gain explicit sidebar destinations if discovery suffers?</div>
+          <div>Should ordinary window closing stay different from “Enable &amp; close”? Recommended: preserve current behavior in this shell-only change.</div>
+        </div>
+      </div>
+    </div>
+    <p class="consult-meta">Model: Astra (<code>gpt-6-astra</code>) · effort medium · read-only. Full record: <a href="../.zcode/consults/20260914T073432Z.JqU1Vs/index.md">consult index</a> · <a href="../.zcode/consults/20260914T073432Z.JqU1Vs/answer.txt">complete answer</a> · <a href="../.zcode/consults/20260914T073432Z.JqU1Vs/transcript.log">transcript</a>. Verify load-bearing claims against the checkout before implementing.</p>
+  </div>
+</section>
+
+<section class="section" id="try">
+  <h2>Task checklist.</h2>
+  <p class="lead">A stranger should complete every task in the proposed shell without instructions. Try them in the wireframe above; anything that needs more than its sidebar destination is a finding.</p>
+  <ul class="checklist">
+    <li><input type="checkbox" id="t1"><label for="t1">Find where Accessibility permissions are managed</label></li>
+    <li><input type="checkbox" id="t2"><label for="t2">Change the double-tap action to Lock Mac</label></li>
+    <li><input type="checkbox" id="t3"><label for="t3">Adjust tap sensitivity and the sampling rate</label></li>
+    <li><input type="checkbox" id="t4"><label for="t4">Start a calibration recording</label></li>
+    <li><input type="checkbox" id="t5"><label for="t5">Reconnect after the sensor drops</label></li>
+    <li><input type="checkbox" id="t6"><label for="t6">Export diagnostics</label></li>
+    <li><input type="checkbox" id="t7"><label for="t7">Pause recognition</label></li>
+    <li><input type="checkbox" id="t8"><label for="t8">Finish setup with Enable &amp; close</label></li>
+  </ul>
+</section>
+
+<section class="section" id="evidence" style="border-bottom:0">
+  <h2>Evidence and limits.</h2>
+  <div class="grid2">
+    <div>
+      <h3>Where this comes from</h3>
+      <ul class="plain">
+        <li>Current shell, footer states and disabled conditions: <code>Sources/TapThatX/SetupView.swift:11</code>, <code>:52</code>, <code>:55</code>; window default size <code>TapThatXApp.swift:17</code>; closing behavior <code>AppModel.swift:117</code>; permission cards <code>PermissionSetupView.swift:9</code>.</li>
+        <li>Sidebar direction, four areas and 140–160 pt target: <a href="tapthatx-chatgpt-mode-design.html">ChatGPT-mode proposal</a> (12 September 2026). ChatGPT pane content mirrors its wireframe.</li>
+        <li>“Keep segments as baseline; prototype the sidebar at 720 × 640”: <a href="tapthatx-unified-design-documentation.html">unified design documentation</a>.</li>
+        <li>Chrome, mapping and sizing decisions above: Astra consult, 14 September 2026 (linked in full).</li>
+      </ul>
+    </div>
+    <div>
+      <h3>What this page cannot prove</h3>
+      <ul class="plain">
+        <li>These are HTML wireframes, not native screenshots. They demonstrate layout and navigation, not AppKit rendering.</li>
+        <li>Native <code>NavigationSplitView</code> geometry, sidebar collapse, VoiceOver order and both macOS appearances require a real build at 720 × 640 before the sidebar replaces segments in code.</li>
+        <li>Stress cases for the native pass: expanded installation guidance, long labels, larger text, always-visible scrollbars, populated recordings and logs.</li>
+        <li>The ring panel, approval companion and adapter behavior are out of scope here by design.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</main>
+<footer><div class="shell">TapThatX · settings window before/after · interactive design documentation · 14 September 2026. The Astra consult record stays local under <code>.zcode/consults/</code>.</div></footer>
+
+<script>
+'use strict';
+(function(){
+  document.body.classList.add('js');
+
+  /* ---------- theme ---------- */
+  var themeBtn=document.getElementById('theme');
+  themeBtn.addEventListener('click',function(){
+    var cur=document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    var next=cur==='dark'?'light':'dark';
+    document.documentElement.dataset.theme=next;
+    themeBtn.textContent=next==='dark'?'Light appearance':'Dark appearance';
+    themeBtn.setAttribute('aria-label','Switch to '+(next==='dark'?'light':'dark')+' appearance');
+  });
+
+  /* ---------- state ---------- */
+  var S={view:'current',w:720,h:800,side:160,state:'ready'};
+  var VIEW_LABEL={current:['Current window','segmented tabs under a large header'],segments:['Compact chrome · segments','header removed, navigation unchanged'],sidebar:['Compact chrome · sidebar','four areas over a pinned footer']};
+  var STATES={
+    ready:{status:'Ready for a double-tap',ack:'Your next recognized double-tap opens the command ring.',close:true,pause:false,reason:''},
+    paused:{status:'Recognition paused',ack:'No taps are being recognized. Your selected action is still Ring.',close:false,pause:true,reason:'Enable & close is unavailable while recognition is paused.'},
+    recording:{status:'Recording motion',ack:'Actions stay paused until the recording ends.',close:false,pause:false,reason:'Finish or stop the recording, then enable.',record:'Recording: 6s'},
+    permission:{status:'Accessibility needs access',ack:'Open Accessibility settings, then check permissions again.',close:true,pause:false,reason:'',permMiss:true},
+    disconnected:{status:'Sensor disconnected',ack:'Permission grants alone do not establish a connection. Reconnect or open connection help.',close:true,pause:false,reason:''},
+    longack:{status:'Listening',ack:'Missed tap; Balanced — 14:03:10. A longer acknowledgment demonstrates the pinned footer growing to keep the full diagnostic text visible instead of truncating it after two lines.',close:true,pause:false,reason:''}
+  };
+
+  var windows={current:document.getElementById('win-current'),segments:document.getElementById('win-segments'),sidebar:document.getElementById('win-sidebar')};
+  var scaler=document.getElementById('scaler'),viewport=document.getElementById('viewport');
+  var stageLabel=document.getElementById('stage-label'),stageScale=document.getElementById('stage-scale');
+  var roSize=document.getElementById('ro-size'),roNav=document.getElementById('ro-nav'),roWidth=document.getElementById('ro-width'),roFormula=document.getElementById('ro-formula');
+
+  /* ---------- scale ---------- */
+  function rescale(){
+    var win=windows[S.view];
+    win.style.width=S.w+'px';win.style.height=S.h+'px';
+    var avail=viewport.clientWidth-8;
+    var scale=Math.min(1,avail/S.w);
+    scaler.style.transform='scale('+scale+')';
+    scaler.style.height=(S.h*scale)+'px';
+    scaler.style.width=(S.w*scale)+'px';
+    stageScale.textContent='shown at '+Math.round(scale*100)+'%';
+  }
+  addEventListener('resize',rescale);
+
+  /* ---------- footer / state application ---------- */
+  function applyState(){
+    var st=STATES[S.state];
+    Object.keys(windows).forEach(function(v){
+      var win=windows[v];
+      win.querySelectorAll('[data-foot-status]').forEach(function(el){el.textContent=st.status});
+      win.querySelectorAll('[data-foot-ack]').forEach(function(el){el.textContent=st.ack});
+      win.querySelectorAll('[data-close]').forEach(function(el){el.disabled=!st.close});
+      win.querySelectorAll('[data-foot-reason]').forEach(function(el){el.hidden=!st.reason;el.textContent=st.reason});
+      win.querySelectorAll('[data-pause]').forEach(function(el){el.setAttribute('aria-pressed',String(st.pause))});
+      win.querySelectorAll('[data-record]').forEach(function(el){el.textContent=st.record||'Record 15 seconds';el.disabled=!!st.record});
+      win.querySelectorAll('[data-perm-ok]').forEach(function(el){el.hidden=!!st.permMiss});
+      win.querySelectorAll('[data-perm-miss]').forEach(function(el){el.hidden=!st.permMiss});
+      win.querySelectorAll('[data-perm-btn]').forEach(function(el){el.hidden=!st.permMiss});
+      win.querySelectorAll('[data-adv-status]').forEach(function(el){if(S.state==='disconnected'){el.textContent='No incoming motion signal'}else{el.textContent='Streaming accelerometer'}});
+    });
+    var badge=document.querySelector('[data-side-badge]');if(badge){badge.hidden=!st.permMiss}
+  }
+
+  /* ---------- view switching ---------- */
+  function setView(view){
+    S.view=view;
+    Object.keys(windows).forEach(function(v){windows[v].hidden=v!==view});
+    document.querySelectorAll('#view-seg button').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.view===view))});
+    document.getElementById('sidebar-ctl').hidden=view!=='sidebar';
+    document.getElementById('legacy-chips').hidden=view!=='sidebar';
+    stageLabel.innerHTML='<strong>'+VIEW_LABEL[view][0]+'</strong> · '+VIEW_LABEL[view][1];
+    if(view==='sidebar'&&S.state==='permission'){selectArea('connection',null)}
+    readout();rescale();
+  }
+  document.querySelectorAll('#view-seg button').forEach(function(b){b.addEventListener('click',function(){setView(b.dataset.view)})});
+
+  /* ---------- tabs (before / compact views) ---------- */
+  document.querySelectorAll('[data-tabs]').forEach(function(tablist){
+    var tabs=[].slice.call(tablist.querySelectorAll('[role=tab]'));
+    var scope=tablist.dataset.tabs;
+    function pick(tab){
+      tabs.forEach(function(t){var on=t===tab;t.setAttribute('aria-selected',String(on));t.tabIndex=on?0:-1});
+      document.querySelectorAll('[data-content="'+scope+'"] [data-pane-box]').forEach(function(box){box.hidden=box.dataset.paneBox!==tab.dataset.pane});
+    }
+    tabs.forEach(function(tab,i){
+      tab.addEventListener('click',function(){pick(tab)});
+      tab.addEventListener('keydown',function(e){
+        var n;if(e.key==='ArrowRight')n=(i+1)%tabs.length;else if(e.key==='ArrowLeft')n=(i-1+tabs.length)%tabs.length;else if(e.key==='Home')n=0;else if(e.key==='End')n=tabs.length-1;else return;
+        e.preventDefault();tabs[n].focus();pick(tabs[n]);
+      });
+    });
+    pick(tabs.filter(function(t){return t.getAttribute('aria-selected')==='true'})[0]||tabs[0]);
+  });
+
+  /* ---------- sidebar areas ---------- */
+  var sideBtns=[].slice.call(document.querySelectorAll('.wf-side [data-area]'));
+  function selectArea(area,scrollTarget){
+    sideBtns.forEach(function(b){b.setAttribute('aria-current',String(b.dataset.area===area))});
+    var content=document.querySelector('[data-content="sidebar"]');
+    document.querySelectorAll('[data-content="sidebar"] [data-pane-box]').forEach(function(box){box.hidden=box.dataset.paneBox!==area});
+    if(scrollTarget){
+      var sec=content.querySelector(scrollTarget);
+      content.scrollTop=0;
+      if(sec){sec.scrollIntoView({behavior:'smooth',block:'start'});sec.classList.remove('flash');void sec.offsetWidth;sec.classList.add('flash')}
+    }else{content.scrollTop=0}
+  }
+  sideBtns.forEach(function(b){b.addEventListener('click',function(){selectArea(b.dataset.area,null)})});
+
+  /* ---------- legacy mapping chips ---------- */
+  var MAP={permissions:['connection','#sec-permissions'],tuning:['tapsetup','#sec-sensitivity'],actions:['tapsetup','#sec-action'],recordings:['activity','#sec-recordings'],advanced:['connection','#sec-sensor']};
+  document.querySelectorAll('#legacy-chips [data-map]').forEach(function(chip){
+    chip.addEventListener('click',function(){
+      var m=MAP[chip.dataset.map];
+      selectArea(m[0],m[1]);
+      if(chip.dataset.map==='advanced'){
+        setTimeout(function(){
+          var content=document.querySelector('[data-content="sidebar"]');
+          var diag=content.querySelector('#sec-diagnostics');
+          if(diag){diag.classList.remove('flash');void diag.offsetWidth;diag.classList.add('flash')}
+        },350);
+      }
+    });
+  });
+
+  /* ---------- jump links inside panes ---------- */
+  document.querySelectorAll('.wf-content .jumps a').forEach(function(a){
+    a.addEventListener('click',function(e){
+      e.preventDefault();
+      var sec=a.closest('.wf-content').querySelector(a.getAttribute('href'));
+      if(sec){sec.scrollIntoView({behavior:'smooth',block:'start'});sec.classList.remove('flash');void sec.offsetWidth;sec.classList.add('flash')}
+    });
+  });
+
+  /* ---------- pause toggles drive real state ---------- */
+  document.querySelectorAll('[data-pause]').forEach(function(t){
+    t.addEventListener('click',function(){
+      var on=t.getAttribute('aria-pressed')==='true';
+      var sel=document.getElementById('state');
+      sel.value=on?'ready':'paused';
+      S.state=on?'ready':'paused';
+      applyState();
+    });
+  });
+
+  /* ---------- size & sidebar controls ---------- */
+  document.getElementById('size').addEventListener('change',function(e){
+    var parts=e.target.value.split('x');S.w=+parts[0];S.h=+parts[1];
+    readout();rescale();
+  });
+  document.querySelectorAll('#side-seg button').forEach(function(b){
+    b.addEventListener('click',function(){
+      S.side=+b.dataset.side;
+      document.querySelectorAll('#side-seg button').forEach(function(x){x.setAttribute('aria-pressed',String(+x.dataset.side===S.side))});
+      document.getElementById('win-sidebar').querySelector('.wf-body').style.gridTemplateColumns=S.side+'px 1fr';
+      readout();rescale();
+    });
+  });
+  document.getElementById('state').addEventListener('change',function(e){
+    S.state=e.target.value;applyState();
+    if(S.state==='permission'&&S.view==='sidebar'){selectArea('connection','#sec-permissions')}
+  });
+
+  /* ---------- readout ---------- */
+  function readout(){
+    roSize.textContent=S.w+' × '+S.h+' pt';
+    if(S.view==='sidebar'){
+      roNav.textContent='sidebar '+S.side+' pt + detail';
+      var usable=S.w-S.side-1-40;
+      roWidth.textContent='≈ '+usable+' pt';
+      roFormula.textContent='('+S.w+' − '+S.side+' sidebar − 1 divider − 2 × 20 padding)';
+    }else{
+      roNav.textContent='5 segmented tabs';
+      var pad=S.view==='current'?48:40;
+      roWidth.textContent='≈ '+(S.w-pad)+' pt';
+      roFormula.textContent='('+S.w+' − '+(pad===48?'2 × 24':'2 × 20')+' content padding)';
+    }
+  }
+
+  applyState();setView('current');
+})();
+</script>
+</body>
+</html>

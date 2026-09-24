@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import ServiceManagement
 import TapCore
+import Combine
 
 enum InputMode: String, CaseIterable { case sensor = "Direct sensor", helper = "Sensor helper", simulated = "Simulated input" }
 
@@ -36,6 +37,7 @@ final class AppModel: ObservableObject {
     @Published var sensitivity = 2.0 {
         didSet {
             UserDefaults.standard.set(sensitivity, forKey: "knockSensitivity")
+            UserDefaults.standard.removeObject(forKey: "calibrationSessionID")
             detector.settings.sensitivity = sensitivity
             resetInteraction(); logSettings()
         }
@@ -62,6 +64,9 @@ final class AppModel: ObservableObject {
     private(set) var warmingUp = true
     @Published var calibrationMode = CommandLine.arguments.contains("--calibrate")
     let diagnostics = DiagnosticsStore()
+    let calibration: CalibrationController
+    private var calibrationObservation: AnyCancellable?
+    private var lastCalibrationRejected = 0
     let ring = RadialPanelController()
     private let sensor = BufferedSensorReader()
     private let helper = HelperClient()
@@ -109,22 +114,70 @@ final class AppModel: ObservableObject {
     var actionBlockReason: String? {
         ActionAvailability.blockReason(calibration: calibrationMode, settingsOpen: isTuning,
             simulated: input == .simulated, paused: paused, inactive: !inactiveReasons.isEmpty,
-            recording: diagnostics.current != nil, enabled: actionsEnabled,
+            recording: diagnostics.current != nil || calibration.blocksActions, enabled: actionsEnabled,
             monitoringOnly: input == .sensor && sampleRate < 50)
     }
     var canEnableActions: Bool { actionBlockReason == nil }
     var actionStatus: String { actionBlockReason ?? "Ready when settings close" }
     func enableAndCloseSettings() {
-        guard diagnostics.current == nil else { return }
+        guard diagnostics.current == nil, !calibration.blocksActions else { return }
         calibrationMode = false; actionsEnabled = true
         setupWindow?.close()
         resetInteraction(resetDetector: false)
     }
 
-    init() {
+    var calibrationUnavailableReason: String? {
+        if input == .simulated { return "Choose a real sensor in Input Source." }
+        if paused || !inactiveReasons.isEmpty { return "Resume the sensor in an active session." }
+        if !setupIsVisible { return "Keep the calibration window visible." }
+        if status != "Streaming accelerometer" { return "Connect the sensor before recording." }
+        if input == .sensor && sampleRate != 800 { return "Choose 800 Hz in Tap Tuning before calibration." }
+        if rate < 700 || rate > 900 { return "Waiting for a steady sensor stream near 800 Hz." }
+        if !typingPermission { return "Enable Input Monitoring so overlapping typing can be identified." }
+        if diagnostics.current != nil { return "Finish the diagnostic recording first." }
+        if calibration.blocksActions, let context = calibration.session?.context,
+           context.input != input.rawValue || context.requestedRate != (input == .helper ? 800 : sampleRate)
+            || context.initialSettings.sensitivity != sensitivity {
+            return "Input or sensitivity changed. Cancel and start a fresh calibration session."
+        }
+        return nil
+    }
+    var canStartCalibration: Bool { calibrationUnavailableReason == nil }
+
+    func beginCalibration(surface: String, placement: String) {
+        guard canStartCalibration else { return }
+        resetInteraction()
+        calibration.begin(context: CalibrationContext(surface: surface, placement: placement,
+            device: diagnostics.model, os: ProcessInfo.processInfo.operatingSystemVersionString,
+            input: input.rawValue, requestedRate: input == .helper ? 800 : sampleRate,
+            initialSettings: detector.settings))
+    }
+    func recordCalibrationTrial() {
+        guard canStartCalibration else { return }
+        lastCalibrationRejected = rejected
+        calibration.record(at: now)
+    }
+    func cancelCalibration() {
+        if calibration.cancel(at: now) { resetInteraction() }
+    }
+    func applyCalibration() {
+        guard calibration.stage == .complete, calibration.session?.verificationPassed == true,
+              let floor = calibration.floor, canStartCalibration,
+              calibration.session?.context.input == input.rawValue else { return }
+        setAmplitudeFloor(floor)
+        UserDefaults.standard.set(calibration.session?.id.uuidString, forKey: "calibrationSessionID")
+        calibration.markApplied()
+        acknowledgment = "Personal sensitivity applied. Recalibrate when the surface or placement changes."
+        diagnostics.log("calibration", "Applied session \(calibration.session!.id); floor=\(floor)")
+    }
+
+    init(startServices: Bool = true, calibration: CalibrationController = CalibrationController()) {
+        self.calibration = calibration
+        calibrationObservation = calibration.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         let savedSensitivity = UserDefaults.standard.object(forKey: "knockSensitivity") as? Double ?? 2.0
         sensitivity = savedSensitivity.isFinite ? min(7, max(0.5, savedSensitivity)) : 2.0
         detector.settings.sensitivity = sensitivity
+        guard startServices else { return }
         sensor.onSamples = { [weak self] in self?.ingest($0) }
         sensor.onStatus = { [weak self] in self?.sensorStatus($0) }
         helper.onSamples = { [weak self] in self?.ingest($0) }
@@ -166,6 +219,7 @@ final class AppModel: ObservableObject {
     }
     private func noteKey() {
         // Never retain characters, key codes, or application identity.
+        calibration.key(at: now)
         lastKeyTime = now
         diagnostics.markKey(at: now)
         diagnostics.recent.appendKey(at: now)
@@ -257,6 +311,7 @@ final class AppModel: ObservableObject {
     }
 
     func resetInteraction(resetDetector: Bool = true) {
+        calibration.interrupt("Input or interaction settings changed. Retry this recording.", at: now)
         generation += 1; pendingImpacts.removeAll(); router.reset(); ring.dismiss()
         lastDoubleTime = nil
         // Changing an action or closing settings must not add another 1.5 s warmup.
@@ -290,6 +345,7 @@ final class AppModel: ObservableObject {
         guard !paused, inactiveReasons.isEmpty else { return }
         let recording = diagnostics.current != nil
         let receivedAt = now
+        calibration.append(samples, receivedAt: receivedAt)
         let maximumGap = max(0.5, 3.0 / Double(sampleRate))
         var waitingForData = input != .simulated && status == "Waiting for fresh sensor data"
         for sample in samples {
@@ -319,6 +375,7 @@ final class AppModel: ObservableObject {
         for event in router.knock(at: time) { route(event, at: time) }
     }
     private func route(_ event: GestureEvent, at time: Double) {
+        guard !calibration.blocksActions else { return }
         if event == .double { recognizedPairs += 1 }
         // Ignore additional vibration while a lock request is in flight.
         guard !ring.state.automaticAction, ring.state.committing == nil, !awaitingLock else { return }
@@ -384,7 +441,7 @@ final class AppModel: ObservableObject {
         toast.show(acknowledgment)
     }
     func inspectAssistantControls() { acknowledgment = AssistantActionExecutor().inspect() }
-    func previewRing() { resetInteraction(resetDetector: false); ring.open(); router.consumeOpening(at: now) }
+    func previewRing() { guard !calibration.blocksActions else { return }; resetInteraction(resetDetector: false); ring.open(); router.consumeOpening(at: now) }
     func simulateKnock() {
         guard input == .simulated, !paused else { return }
         simulatedUntil = now + 0.018
@@ -426,6 +483,12 @@ final class AppModel: ObservableObject {
             rate = Double(sampleCount) / max(0.01, time - simulationStarted)
         } else { rate = input == .helper ? helper.rate : sensor.rate }
         rejected = input == .helper ? helper.rejected : sensor.rejectedReports
+        if rejected > lastCalibrationRejected { calibration.flag("Sensor reports were dropped or rejected.") }
+        lastCalibrationRejected = rejected
+        if calibration.stage == .recording && (!setupIsVisible || !typingPermission) {
+            calibration.interrupt("Keep calibration visible and Input Monitoring enabled while recording.", at: time)
+        }
+        calibration.tick(at: time)
         let ready = pendingImpacts.filter { time - $0 >= 0.04 }
         pendingImpacts.removeAll { time - $0 >= 0.04 }
         for impact in ready {
@@ -470,6 +533,7 @@ final class AppModel: ObservableObject {
     }
 
     func startCapture(label: String, purpose: String, expectedDoubleKnocks: Int) {
+        guard !calibration.blocksActions else { return }
         resetInteraction()
         diagnostics.startCapture(label: label, purpose: purpose, simulated: input == .simulated, expectedDoubleKnocks: expectedDoubleKnocks)
     }
@@ -483,14 +547,14 @@ final class AppModel: ObservableObject {
         } catch { acknowledgment = "Recent activity save failed: \(error.localizedDescription)" }
         toast.show(acknowledgment)
     }
-    func saveCalibration() {
+    func saveDiagnosticRecordings() {
         do {
             let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("TapThatX")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let url = directory.appendingPathComponent("calibration-captures.json")
+            let url = directory.appendingPathComponent("diagnostic-recordings-\(UUID().uuidString).json")
             try diagnostics.export(preset: preset, settings: detector.settings, to: url)
-            acknowledgment = "Saved calibration-captures.json in Library/Application Support/TapThatX"
-        } catch { acknowledgment = "Calibration save failed: \(error.localizedDescription)" }
+            acknowledgment = "Saved \(url.lastPathComponent) in Library/Application Support/TapThatX"
+        } catch { acknowledgment = "Diagnostic save failed: \(error.localizedDescription)" }
     }
 
     func mark(_ message: String) { diagnostics.log("feedback", message); acknowledgment = "Feedback marker saved" }
@@ -518,6 +582,7 @@ final class AppModel: ObservableObject {
         }
     }
     func shutdown() {
+        if calibration.blocksActions { _ = calibration.cancel(at: now) }
         timer?.invalidate(); timer = nil; toast.dismiss(); ring.dismiss(); sensor.stop(); helper.stop(); diagnostics.finishCapture()
         typingMonitor.stop()
         if let localKeyMonitor { NSEvent.removeMonitor(localKeyMonitor) }

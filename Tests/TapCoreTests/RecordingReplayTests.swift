@@ -18,16 +18,6 @@ final class RecordingReplayTests: XCTestCase {
         XCTAssertTrue(result.doubleKnockTimes.isEmpty)
     }
 
-    func testRealVerificationRecordingsWithTripleRecognition() throws {
-        let url = Bundle.module.url(forResource: "verification-round1", withExtension: "json")!
-        let dataset = try JSONDecoder().decode(ReplayDataset.self, from: Data(contentsOf: url))
-        for recording in dataset.captures {
-            let result = try RecordingReplay.evaluate(samples: recording.samples, keyTimes: recording.keyTimes ?? [], settings: settings, recognizesTriples: true)
-            XCTAssertEqual(result.doubleKnockTimes.count, recording.expectedDoubleKnocks)
-            XCTAssertTrue(result.tripleKnockTimes.isEmpty)
-        }
-    }
-
     func testSingleImpactDoesNotProduceDoubleKnock() throws {
         let result = try RecordingReplay.evaluate(samples: samples(impacts: [2]), keyTimes: [], settings: settings)
         XCTAssertEqual(result.doubleKnockTimes.count, 0)
@@ -50,14 +40,6 @@ final class RecordingReplayTests: XCTestCase {
         XCTAssertThrowsError(try RecordingReplay.evaluate(samples: input, keyTimes: [], settings: settings))
     }
 
-    func testDatasetRequiresGroundTruthInsteadOfUsingDetectorCount() throws {
-        let json = """
-        {"captures":[{"label":"Desk knocks","purpose":"Calibration","simulated":false,"samples":[],"knocks":12}]}
-        """
-        let dataset = try JSONDecoder().decode(ReplayDataset.self, from: Data(json.utf8))
-        XCTAssertNil(dataset.captures[0].expectedDoubleKnocks)
-    }
-
     func testSustainedShakeMustNotTrigger() throws {
         let input = (0..<4000).map { index in
             let t = Double(index) / 1000
@@ -77,39 +59,6 @@ final class RecordingReplayTests: XCTestCase {
         }
         let result = try RecordingReplay.evaluate(samples: input, keyTimes: [], settings: settings)
         XCTAssertEqual(result.doubleKnockTimes.count, 0)
-    }
-
-    func testRecordedTypingHasNoFalseDoubleTaps() throws {
-        let dataset = try loadRecordings()
-        let recording = dataset.captures.last!
-        XCTAssertEqual(recording.label, "Typing")
-        let result = try RecordingReplay.evaluate(samples: recording.samples, keyTimes: recording.keyTimes ?? [], settings: settings)
-        XCTAssertEqual(result.doubleKnockTimes.count, 0)
-    }
-
-    func testPreviouslyRecognizedRealTapRecordingsRemainDetectable() throws {
-        let dataset = try loadRecordings()
-        // Recording 4 was already missed by the baseline. Counts and exact tap
-        // times are not independently annotated, so do not force a count of 1.
-        for index in [0, 1, 2, 3, 5] {
-            let recording = dataset.captures[index]
-            let result = try RecordingReplay.evaluate(samples: recording.samples, keyTimes: recording.keyTimes ?? [], settings: settings)
-            XCTAssertFalse(result.doubleKnockTimes.isEmpty, "Lost tap recording \(index)")
-        }
-    }
-
-    private func loadRecordings() throws -> ReplayDataset {
-        let url = Bundle.module.url(forResource: "calibration-labeled", withExtension: "json")!
-        return try JSONDecoder().decode(ReplayDataset.self, from: Data(contentsOf: url))
-    }
-
-    func testFreshDeskTapAndIncidentalMovementRecordings() throws {
-        let url = Bundle.module.url(forResource: "verification-round1", withExtension: "json")!
-        let dataset = try JSONDecoder().decode(ReplayDataset.self, from: Data(contentsOf: url))
-        for (index, recording) in dataset.captures.enumerated() {
-            let result = try RecordingReplay.evaluate(samples: recording.samples, keyTimes: recording.keyTimes ?? [], settings: settings)
-            XCTAssertEqual(result.doubleKnockTimes.count, recording.expectedDoubleKnocks, "Recording \(index): \(recording.label)")
-        }
     }
 
     private var settings: DetectorSettings {

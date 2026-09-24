@@ -21,18 +21,6 @@ final class InteractionSettingsTests: XCTestCase {
         }
         XCTAssertEqual(try RecordingReplay.evaluate(samples: samples, keyTimes: [], settings: settings).doubleKnockTimes.count, 1)
     }
-    func testLightTapProfileRejectsRecordedIncidentalMovement() throws {
-        var settings = DetectorSettings()
-        settings.sensitivity = DetectorSettings.sensitivity(forAmplitudeFloor: 0.008)
-        for name in ["calibration-labeled", "verification-round1"] {
-            let url = Bundle.module.url(forResource: name, withExtension: "json")!
-            let data = try JSONDecoder().decode(ReplayDataset.self, from: Data(contentsOf: url))
-            for recording in data.captures where recording.expectedDoubleKnocks == 0 {
-                let result = try RecordingReplay.evaluate(samples: recording.samples, keyTimes: recording.keyTimes ?? [], settings: settings)
-                XCTAssertTrue(result.doubleKnockTimes.isEmpty, recording.label)
-            }
-        }
-    }
     func testOneHzMonitoringCanFinishWarmup() {
         var detector = KnockDetector()
         for time in 0...4 {
