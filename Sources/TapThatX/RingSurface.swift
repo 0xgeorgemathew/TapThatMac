@@ -240,8 +240,23 @@ struct RingContent: View {
             RingSelectionSurface()
                 .fill(accent.opacity(contrast == .increased ? 0.23 : 0.13))
                 .overlay {
+                    // Top-lit glass rim on the pill-shaped segment, matching
+                    // the edge treatment of the settings panes' cards.
                     RingSelectionSurface()
-                        .stroke(accent.opacity(contrast == .increased ? 0.75 : 0.18), lineWidth: contrast == .increased ? 1.5 : 0.75)
+                        .stroke(
+                            LinearGradient(
+                                colors: contrast == .increased
+                                    ? [accent.opacity(0.75), accent.opacity(0.75)]
+                                    : [accent.opacity(0.45), accent.opacity(0.1)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: contrast == .increased ? 1.5 : 1
+                        )
+                }
+                .overlay {
+                    RingSelectionSurface()
+                        .stroke(Color.primary.opacity(contrast == .increased ? 0 : 0.06), lineWidth: 0.5)
                 }
                 .modifier(PresentedSelectionRotation(angle: state.selectionAngle, state: state))
                 .animation(reduceMotion ? nil : RingMotion.selection, value: state.selectionAngle)
@@ -259,7 +274,7 @@ struct RingContent: View {
                                 .font(.system(size: 23, weight: isSelected ? .medium : .regular))
                                 .frame(height: 26)
                             Text(command.rawValue)
-                                .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
+                                .font(.system(size: 10, weight: isSelected ? .semibold : .medium, design: .rounded))
                                 .multilineTextAlignment(.center)
                                 .frame(width: 82)
                         }

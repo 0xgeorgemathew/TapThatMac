@@ -39,9 +39,11 @@ struct PaneHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(title).font(.system(size: 22, weight: .semibold))
+            Text(title)
+                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .tracking(-1.0)
             if let detail {
-                Text(detail).font(.callout).foregroundStyle(.secondary)
+                Text(detail).font(.title3).foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 20)

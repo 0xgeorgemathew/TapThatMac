@@ -31,7 +31,7 @@ struct CenterReadout: View {
                 .accessibilityHidden(true)
 
             Text(command?.rawValue ?? "TapThatX")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -59,10 +59,19 @@ struct CenterReadout: View {
                 .fill(Color(nsColor: .windowBackgroundColor).opacity(reduceTransparency ? 1 : 0.24))
         }
         .overlay {
+            // A whisper of the accent so the hub reads as part of the ring.
             Circle()
-                .strokeBorder(Color.primary.opacity(contrast == .increased ? 0.4 : 0.09),
-                              lineWidth: contrast == .increased ? 1 : 0.5)
+                .fill(ReactorTheme.accent.opacity(reduceTransparency || contrast == .increased ? 0 : 0.05))
         }
+        .overlay {
+            // Strong hairline when contrast is increased; otherwise the shared
+            // top-lit glass edge below carries the rim.
+            if contrast == .increased {
+                Circle()
+                    .strokeBorder(Color.primary.opacity(0.4), lineWidth: 1)
+            }
+        }
+        .reactorEdgeHighlight(in: Circle())
         .accessibilityElement(children: .combine)
         .allowsHitTesting(false)
     }

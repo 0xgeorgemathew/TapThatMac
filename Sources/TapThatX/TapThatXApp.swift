@@ -14,7 +14,14 @@ struct TapThatXApp: App {
         }
         Window("TapThatX Settings", id: "setup") {
             SetupView(model: model).onAppear { delegate.model = model }
-        }.defaultSize(width: 900, height: 660)
+        }
+        // Full-size content view: the titlebar is transparent and the traffic
+        // lights float over the glass content, as in modern macOS chrome.
+        // hiddenTitleBar exists since macOS 11 and picks up the macOS 26+
+        // rounded Liquid Glass refinements automatically, so no version fork
+        // is needed at the macOS 14 deployment target.
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 900, height: 660)
     }
 }
 

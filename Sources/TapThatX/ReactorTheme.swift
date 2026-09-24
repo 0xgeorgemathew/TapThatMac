@@ -57,6 +57,82 @@ struct ReactorGlassContainer<Content: View>: View {
     }
 }
 
+// MARK: - Additive UI helpers (glass redesign pass)
+
+/// Subtle 1px top-lit inner highlight so glass edges refract like ZCode/Codex.
+/// Uses label-tinted (white-in-dark / black-in-light) strokes, not a new color.
+extension View {
+    func reactorEdgeHighlight<S: InsettableShape>(in shape: S) -> some View {
+        overlay(
+            shape.strokeBorder(
+                LinearGradient(
+                    colors: [.primary.opacity(0.12), .primary.opacity(0.03)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                lineWidth: 1
+            )
+        )
+    }
+}
+
+/// Accent radial glow over the window background, matching CalibrationPane.
+struct ReactorBackdrop: View {
+    var body: some View {
+        ZStack {
+            Color(nsColor: .windowBackgroundColor)
+            RadialGradient(
+                colors: [ReactorTheme.accent.opacity(0.12), .clear],
+                center: .center,
+                startRadius: 20,
+                endRadius: 420
+            )
+        }
+    }
+}
+
+/// Big tactile glassy button: capsule glass, 44pt+ tall, wide padding,
+/// quick press spring. Prominent variants tint the glass with the accent.
+struct ReactorBigButtonStyle: ButtonStyle {
+    var prominent: Bool = false
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .foregroundStyle(
+                prominent ? AnyShapeStyle(Color.white) : AnyShapeStyle(ReactorTheme.accent)
+            )
+            .padding(.horizontal, 28)
+            .frame(minHeight: 44)
+            .background {
+                if prominent {
+                    Capsule().fill(ReactorTheme.accent.opacity(reduceTransparency ? 1 : 0.85))
+                }
+            }
+            .reactorGlass(in: Capsule(), interactive: true)
+            .reactorEdgeHighlight(in: Capsule())
+            .opacity(isEnabled ? 1 : 0.45)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.62),
+                value: configuration.isPressed
+            )
+    }
+}
+
+extension ButtonStyle where Self == ReactorBigButtonStyle {
+    /// Big glassy secondary action.
+    static var reactorBigButton: ReactorBigButtonStyle { ReactorBigButtonStyle() }
+
+    /// Big glassy action; prominent tints it with the one accent.
+    static func reactorBigButton(prominent: Bool) -> ReactorBigButtonStyle {
+        ReactorBigButtonStyle(prominent: prominent)
+    }
+}
+
 extension View {
     /// Prominent action: Liquid Glass prominent on macOS 26, classic below.
     @ViewBuilder
