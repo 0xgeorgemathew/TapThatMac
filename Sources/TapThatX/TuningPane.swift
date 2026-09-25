@@ -10,6 +10,9 @@ struct TuningPane: View {
     @State private var liveAmplitude = 0.0
     /// In-flight one-shot tap pulse rings over the graph.
     @State private var tapPulses: [UUID] = []
+    @State private var graphScale: MotionGraphScale = .detail
+    @State private var graphDuration = 8.0
+    @State private var graphHeld = false
     var body: some View {
         PaneScaffold {
             VStack(alignment: .leading, spacing: 24) {
@@ -27,7 +30,7 @@ struct TuningPane: View {
             liveAmplitude = value
         }
         .onReceive(model.tapDetected) {
-            guard !reduceMotion else { return }
+            guard !reduceMotion, !graphHeld else { return }
             let id = UUID()
             tapPulses.append(id)
             Task {
@@ -61,8 +64,31 @@ struct TuningPane: View {
             .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: model.knocks)
             .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: model.recognizedPairs)
 
-            MotionGraphView(model: model)
-                .frame(height: 300)
+            HStack(spacing: 12) {
+                Picker("Signal scale", selection: $graphScale) {
+                    ForEach(MotionGraphScale.allCases, id: \.self) { scale in
+                        Text(scale.rawValue).tag(scale)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 280)
+                Picker("Time window", selection: $graphDuration) {
+                    Text("2 s").tag(2.0)
+                    Text("8 s").tag(8.0)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 100)
+                Spacer(minLength: 0)
+                Button(graphHeld ? "Resume live" : "Hold trace") {
+                    tapPulses.removeAll()
+                    graphHeld.toggle()
+                }
+                .buttonStyle(.reactorButtonCompact)
+                .help("Hold the graph for inspection. Sensor sampling continues.")
+            }
+
+            MotionGraphView(model: model, scale: graphScale, duration: graphDuration, held: graphHeld)
+                .frame(height: 340)
                 .clipShape(ReactorTheme.cardShape)
                 .overlay(TapPulseLayer(pulses: tapPulses, reduceMotion: reduceMotion))
 
@@ -78,12 +104,17 @@ struct TuningPane: View {
                 ReactorGlassContainer(spacing: 8) {
                     Button("Set for light taps") { model.setAmplitudeFloor(0.008) }
                         .buttonStyle(.reactorButtonCompact)
+                        .disabled(graphHeld)
                     Button("Reset threshold") { model.setAmplitudeFloor(0.0175) }
                         .buttonStyle(.reactorButtonCompact)
+                        .disabled(graphHeld)
                 }
             }
 
-            Text("Drag the gold line just above everyday movement. The dashed line shows the background-noise floor; a peak still needs valid double-tap timing.")
+            Text("Low-range detail expands small signals on a nonlinear axis; values stay in g. Hold the trace and hover to inspect peaks. Drag the gold minimum to tune, or use arrow keys (Shift for fine steps).")
+                .font(.caption).foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+            Text("Cyan shows motion-envelope peaks in 20 ms buckets. The dashed gold line is its adaptive detection gate, including noise rejection. Light-tap impulse detection is separate and is not plotted. A crossing alone does not confirm a tap.")
                 .font(.caption).foregroundStyle(.secondary)
                 .multilineTextAlignment(.leading)
         }
