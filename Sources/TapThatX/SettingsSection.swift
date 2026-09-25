@@ -20,10 +20,12 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
 
     var icon: String {
         switch self {
-        case .permissions: "lock.shield"
+        // Monochrome symbols throughout: multicolor-capable glyphs can render
+        // untinted in sidebars, which broke accent consistency.
+        case .permissions: "checkmark.shield"
         case .tuning: "waveform"
-        case .calibration: "hand.tap.fill"
-        case .actions: "hand.tap"
+        case .calibration: "target"
+        case .actions: "bolt.fill"
         case .recordings: "record.circle"
         case .input: "cable.connector"
         case .diagnostics: "ladybug"
@@ -31,24 +33,25 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-/// Pinned pane header: the shared `heading()` recipe, now above every pane's
-/// grouped form. The form below owns all scrolling.
+/// Pinned pane header above every pane's grouped content. The pane scaffold
+/// owns the horizontal padding; the header only adds vertical breathing room.
 struct PaneHeader: View {
     let title: String
     var detail: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
+            // Calibration-scale display type: large rounded semibold with
+            // tight tracking, matched to the reference screen's headers.
             Text(title)
-                .font(.system(size: 30, weight: .semibold, design: .rounded))
-                .tracking(-1.0)
+                .font(.system(size: 36, weight: .semibold, design: .rounded))
+                .tracking(-1.1)
             if let detail {
                 Text(detail).font(.title3).foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
-        .padding(.bottom, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

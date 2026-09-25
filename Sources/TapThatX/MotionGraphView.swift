@@ -123,7 +123,8 @@ final class MotionGraphNSView: NSView {
         else if let recognized = model.lastDoubleTime, time - recognized < 1.2 { state = "DOUBLE-TAP RECOGNIZED" }
         else { state = "LIVE · TAP TO TRY" }
         text(state, x: 16, y: bounds.height - 26, color: reactor)
-        text("\(model.knocks) taps · \(model.recognizedPairs) pairs", x: max(220, bounds.width - 215), y: bounds.height - 26, color: .lightGray)
+        // The taps/pairs counter moved into the pane's hero header so it can
+        // animate with contentTransition(.numericText()).
         text("−8s", x: plot.minX, y: 12, color: axisText)
         text(points.contains { $0.peak > ceiling } ? "Peak exceeds 0.100 g" : "MOTION (g)", x: plot.minX + 58, y: 12, color: axisText)
         text("NOW", x: plot.maxX - 24, y: 12, color: axisText)

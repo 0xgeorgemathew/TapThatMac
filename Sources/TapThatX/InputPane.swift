@@ -4,36 +4,23 @@ import SwiftUI
 struct InputPane: View {
     @ObservedObject var model: AppModel
 
-    private var surface: RoundedRectangle {
-        RoundedRectangle(cornerRadius: ReactorTheme.surfaceRadius, style: .continuous)
-    }
-
     var body: some View {
-        ZStack {
-            ReactorBackdrop().ignoresSafeArea()
+        PaneScaffold {
+            VStack(alignment: .leading, spacing: 24) {
+                PaneHeader(title: "Connection",
+                           detail: model.diagnostics.model)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    PaneHeader(title: "Connection",
-                               detail: model.diagnostics.model)
-
-                    ReactorGlassContainer(spacing: 12) {
-                        VStack(spacing: 12) {
-                            sourceCard
-                            if model.input == .simulated { simulatorCard }
-                            if model.input == .helper { helperCard }
-                        }
-                    }
+                VStack(spacing: 20) {
+                    sourceCard
+                    if model.input == .simulated { simulatorCard }
+                    if model.input == .helper { helperCard }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
 
     private var sourceCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             Picker("Input", selection: $model.input) {
                 ForEach(InputMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
@@ -43,45 +30,40 @@ struct InputPane: View {
                 Text(model.status).font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 Button("Reconnect") { model.restart() }
-                    .buttonStyle(.reactorBigButton)
+                    .buttonStyle(.reactorButton)
             }
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .reactorGlass(in: surface)
-        .reactorEdgeHighlight(in: surface)
+        .reactorCard()
     }
 
     private var simulatorCard: some View {
-        HStack(spacing: 14) {
-            Button("Single tap") { model.simulateKnock() }
-                .buttonStyle(.reactorBigButton)
-            Button("Double-tap") { model.simulateDouble() }
-                .buttonStyle(.reactorBigButton)
-            Spacer()
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .reactorGlass(in: surface)
-        .reactorEdgeHighlight(in: surface)
-    }
-
-    private var helperCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(model.helperStatus).font(.callout).foregroundStyle(.secondary)
-            HStack(spacing: 14) {
-                Button("Register helper") { model.installHelper() }
-                    .buttonStyle(.reactorBigButton(prominent: true))
-                Button("Approval settings") { SMAppService.openSystemSettingsLoginItems() }
-                    .buttonStyle(.reactorBigButton)
-                Button("Remove helper") { model.removeHelper() }
-                    .buttonStyle(.reactorBigButton)
+        ReactorGlassContainer(spacing: 12) {
+            HStack(spacing: 16) {
+                Button("Single tap") { model.simulateKnock() }
+                    .buttonStyle(.reactorButton)
+                Button("Double-tap") { model.simulateDouble() }
+                    .buttonStyle(.reactorButton)
                 Spacer()
             }
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .reactorGlass(in: surface)
-        .reactorEdgeHighlight(in: surface)
+        .reactorCard()
+    }
+
+    private var helperCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(model.helperStatus).font(.callout).foregroundStyle(.secondary)
+            ReactorGlassContainer(spacing: 12) {
+                HStack(spacing: 16) {
+                    Button("Register helper") { model.installHelper() }
+                        .buttonStyle(.reactorButton(prominent: true))
+                    Button("Approval settings") { SMAppService.openSystemSettingsLoginItems() }
+                        .buttonStyle(.reactorButton)
+                    Button("Remove helper") { model.removeHelper() }
+                        .buttonStyle(.reactorButton)
+                    Spacer()
+                }
+            }
+        }
+        .reactorCard()
     }
 }

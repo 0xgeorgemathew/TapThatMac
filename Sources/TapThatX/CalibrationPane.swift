@@ -11,18 +11,17 @@ struct CalibrationPane: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
-            calibrationBackdrop
-
-            VStack(spacing: 0) {
-                topBar
-                Spacer(minLength: 24)
-                content
-                Spacer(minLength: 24)
-                footer
-            }
-            .padding(28)
+        // The shell's ReactorStage now provides the stage: a real vibrancy
+        // window with the same radial accent glow, so calibration floats on
+        // translucent glass instead of an opaque painted backdrop.
+        VStack(spacing: 0) {
+            topBar
+            Spacer(minLength: 24)
+            content
+            Spacer(minLength: 24)
+            footer
         }
+        .padding(28)
         .task(id: automationKey) { await advanceFlowIfNeeded() }
         .onDisappear {
             calibration.interrupt(
@@ -30,19 +29,6 @@ struct CalibrationPane: View {
                 at: ProcessInfo.processInfo.systemUptime
             )
         }
-    }
-
-    private var calibrationBackdrop: some View {
-        ZStack {
-            Color(nsColor: .windowBackgroundColor)
-            RadialGradient(
-                colors: [ReactorTheme.accent.opacity(0.13), .clear],
-                center: .center,
-                startRadius: 20,
-                endRadius: 420
-            )
-        }
-        .ignoresSafeArea()
     }
 
     private var topBar: some View {
@@ -53,11 +39,10 @@ struct CalibrationPane: View {
                 onDismissOnboarding()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .frame(width: 34, height: 34)
             }
-            .buttonStyle(.plain)
-            .reactorGlass(in: Circle(), interactive: true)
+            .buttonStyle(.reactorIconButton)
             .accessibilityLabel("Close calibration")
 
             Spacer()
@@ -90,7 +75,7 @@ struct CalibrationPane: View {
             GestureIndicator(activity: .lightPair, isActive: true, reduceMotion: reduceMotion)
 
             VStack(spacing: 10) {
-                Text("Four taps. That’s it.")
+                Text("Four taps. That's it.")
                     .font(.system(size: 36, weight: .semibold, design: .rounded))
                     .tracking(-1.1)
                 Text("Light tap. Tap. Single. Double.")
@@ -99,8 +84,7 @@ struct CalibrationPane: View {
             }
 
             Button("Begin") { model.beginCalibration() }
-                .reactorProminentButton()
-                .controlSize(.large)
+                .buttonStyle(.reactorButton(prominent: true))
                 .disabled(!model.canStartCalibration)
         }
         .frame(maxWidth: 520)
@@ -141,7 +125,7 @@ struct CalibrationPane: View {
                 HStack(spacing: 12) {
                     Text("Try that once more").foregroundStyle(.secondary)
                     Button("Retry") { calibration.retry() }
-                        .reactorGlassButton()
+                        .buttonStyle(.reactorButtonCompact(prominent: true))
                 }
             }
         } else {
@@ -168,14 +152,13 @@ struct CalibrationPane: View {
             VStack(spacing: 9) {
                 Text("Ready")
                     .font(.system(size: 40, weight: .semibold, design: .rounded))
-                Text("Your taps now feel like yours.")
+                Text("Your taps now trigger your actions.")
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
 
             Button("Done") { onDismissOnboarding() }
-                .reactorProminentButton()
-                .controlSize(.large)
+                .buttonStyle(.reactorButton(prominent: true))
                 .disabled(!calibration.applied)
         }
     }
@@ -189,7 +172,7 @@ struct CalibrationPane: View {
                 .reactorGlass(in: Circle())
 
             VStack(spacing: 9) {
-                Text("Let’s try again")
+                Text("Let's try again")
                     .font(.system(size: 36, weight: .semibold, design: .rounded))
                 Text("Make the light tap softer and the firm tap more distinct.")
                     .font(.title3)
@@ -200,8 +183,7 @@ struct CalibrationPane: View {
                 model.cancelCalibration()
                 model.beginCalibration()
             }
-            .reactorProminentButton()
-            .controlSize(.large)
+            .buttonStyle(.reactorButton(prominent: true))
         }
     }
 
@@ -287,9 +269,9 @@ struct CalibrationPane: View {
     private func instruction(for activity: CalibrationActivity) -> String {
         switch activity {
         case .lightTap: "Tap once, gently."
-        case .lightPair: "Tap twice, gently — a quick one-two."
+        case .lightPair: "Tap twice, gently. A quick one-two."
         case .knock: "Tap once, naturally."
-        case .knockPair: "Tap twice, naturally — a quick one-two."
+        case .knockPair: "Tap twice, naturally. A quick one-two."
         default: activity.instruction
         }
     }

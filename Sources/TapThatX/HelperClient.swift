@@ -38,7 +38,7 @@ final class HelperClient {
         connection.setCodeSigningRequirement(requirement)
         connection.remoteObjectInterface = NSXPCInterface(with: SensorService.self)
         connection.interruptionHandler = { [weak self, weak connection] in
-            DispatchQueue.main.async { guard let connection, self?.connection === connection else { return }; self?.fail("Helper interrupted — reconnect to retry") }
+            DispatchQueue.main.async { guard let connection, self?.connection === connection else { return }; self?.fail("Helper interrupted. Reconnect to retry") }
         }
         connection.invalidationHandler = { [weak self, weak connection] in
             DispatchQueue.main.async { guard let connection, self?.connection === connection else { return }; self?.fail("Helper disconnected or approval revoked") }
@@ -46,7 +46,7 @@ final class HelperClient {
         self.connection = connection; connection.resume()
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self, weak connection] in
             guard let self, let connection, self.connection === connection, self.timer == nil else { return }
-            self.fail("Helper start timed out — reconnect to retry")
+            self.fail("Helper start timed out. Reconnect to retry")
         }
         proxy()?.start { [weak self, weak connection] status in
             DispatchQueue.main.async {
@@ -67,7 +67,7 @@ final class HelperClient {
     }
     private func read() {
         if pendingRead {
-            if ProcessInfo.processInfo.systemUptime - pendingSince > 3 { fail("Helper timed out — reconnect to retry") }
+            if ProcessInfo.processInfo.systemUptime - pendingSince > 3 { fail("Helper timed out. Reconnect to retry") }
             return
         }
         pendingRead = true; pendingSince = ProcessInfo.processInfo.systemUptime

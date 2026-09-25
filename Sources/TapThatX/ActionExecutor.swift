@@ -22,7 +22,7 @@ struct ActionExecutor {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
             // Give the system shortcut handler a normal key press duration.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { up.post(tap: .cghidEventTap) }
-            return "Lock shortcut sent — waiting for macOS lock confirmation"
+            return "Lock shortcut sent. Waiting for macOS lock confirmation"
         }
         // Compatibility-sensitive system media events; no player is launched.
         let key: Int = command == .playPause ? 16 : (command == .next ? 17 : 18)
@@ -34,6 +34,6 @@ struct ActionExecutor {
         }
         guard let down = event(down: true), let up = event(down: false) else { return "Not sent: media event creation failed" }
         down.post(tap: .cghidEventTap); up.post(tap: .cghidEventTap)
-        return "\(command.rawValue) command sent — playback not verified"
+        return "\(command.rawValue) command sent. Playback not verified"
     }
 }

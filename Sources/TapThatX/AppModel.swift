@@ -102,6 +102,16 @@ final class AppModel: ObservableObject {
     var refreshGraph: (() -> Void)?
     var graphIsAttached = false
     private(set) var motionTrace = MotionTrace()
+    // Reactive UI signals (glass redesign pass 2). Both are fed from the
+    // existing main-runloop tick, never per sensor sample.
+    /// Decaying envelope of current motion magnitude in g (the same peaks the
+    /// graph renders), sent at most every 100 ms while settings are visible.
+    /// Falls toward zero when the stream stalls so reactive UI settles.
+    let liveAmplitude = PassthroughSubject<Double, Never>()
+    /// Fires once per accepted tap (each member of a pair fires once).
+    let tapDetected = PassthroughSubject<Void, Never>()
+    private var lastLiveAmplitudeAt = 0.0
+    private var liveLevel = 0.0
     private var wasTuning = false
     private var collectGraph = false
     private var lastRuntimeWrite = 0.0
@@ -410,7 +420,7 @@ final class AppModel: ObservableObject {
         switch input {
         case .sensor: sensor.start(sampleRate: sampleRate)
         case .helper: helper.start()
-        case .simulated: status = "Simulated — no hardware or system actions"; simulationStarted = now; simulatedUntil = now
+        case .simulated: status = "Simulated. No hardware or system actions"; simulationStarted = now; simulatedUntil = now
         }
     }
     private func sensorStatus(_ value: String) {
@@ -455,6 +465,7 @@ final class AppModel: ObservableObject {
     }
     private func knock(at time: Double) {
         knocks += 1; diagnostics.markKnock(); diagnostics.log("knock", "\(input.rawValue); t=\(String(format: "%.3f", time))")
+        tapDetected.send()
         for event in router.knock(at: time) { route(event, at: time) }
     }
     private func route(_ event: GestureEvent, at time: Double) {
@@ -515,7 +526,7 @@ final class AppModel: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
                 guard let self, self.awaitingLock, self.lockAttempt == attempt else { return }
                 self.awaitingLock = false
-                self.acknowledgment = "Lock not confirmed. Check Accessibility permission and Control–Command–Q."
+                self.acknowledgment = "Lock not confirmed. Check Accessibility permission and Control-Command-Q."
                 self.diagnostics.log("lock", self.acknowledgment)
                 self.toast.show(self.acknowledgment)
             }
@@ -585,6 +596,16 @@ final class AppModel: ObservableObject {
         // refreshes counters once a second, and never while hidden or occluded.
         if setupIsVisible {
             refreshGraph?()
+            // Live motion envelope for reactive UI, throttled to ~10 Hz. The
+            // level decays between sends and drops to zero when the trace has
+            // no fresh points, so glow and indicator settle when motion stops.
+            if time - lastLiveAmplitudeAt >= 0.1 {
+                lastLiveAmplitudeAt = time
+                let peak = motionTrace.points.last
+                let stale = peak.map { time - $0.time > 0.3 } ?? true
+                liveLevel = max(stale ? 0 : peak?.peak ?? 0, liveLevel * 0.7)
+                liveAmplitude.send(liveLevel)
+            }
             if time - lastPresentationTime >= 1 {
                 lastPresentationTime = time
                 objectWillChange.send()
