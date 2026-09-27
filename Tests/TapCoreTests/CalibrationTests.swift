@@ -113,8 +113,18 @@ final class CalibrationTests: XCTestCase {
         XCTAssertFalse(decoded.trials[0].confirmed); XCTAssertFalse(decoded.verificationPassed)
     }
 
-    func testCurrentSequenceIsOnlyTheFourRequestedGestures() {
-        XCTAssertEqual(CalibrationStep.sequence.map(\.activity), [.lightTap, .lightPair, .knock, .knockPair])
+    func testVerificationCannotPassWithoutIndependentRecordings() {
+        let training = CalibrationStep.sequence.filter { $0.partition == .training }.map { trial($0) }
+        XCTAssertThrowsError(try CalibrationEvaluator.verify(training, frozenFloor: 0.008))
+    }
+
+    func testCalibrationAcceptsTheLiveMinimumAndFitsWeakDeskContacts() throws {
+        let light = trial(.init(.lightTap, .training), amplitude: 0.003)
+        XCTAssertTrue(try CalibrationEvaluator.score(light, floor: 0.002).passed)
+        let data = CalibrationStep.sequence.map { trial($0, amplitude: 0.003) }
+        let settings = try XCTUnwrap(CalibrationEvaluator.candidateSettings(from: data))
+        XCTAssertLessThan(settings.amplitudeFloor, 0.005)
+        XCTAssertTrue(try data.allSatisfy { try CalibrationEvaluator.score($0, settings: settings).passed })
     }
 
     func testLegacySurfaceMovementSequenceRemainsReplayable() {

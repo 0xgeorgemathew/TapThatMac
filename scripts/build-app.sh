@@ -20,7 +20,7 @@ if [[ -f Packaging/AppIcon.icns ]]; then
   cp Packaging/AppIcon.icns "$app/Contents/Resources/"
 fi
 if [[ -d Packaging/Assets ]]; then
-  cp Packaging/Assets/*.png "$app/Contents/Resources/" 2>/dev/null || true
+  cp Packaging/Assets/AppIcon*.png "$app/Contents/Resources/" 2>/dev/null || true
 fi
 identity="${SIGNING_IDENTITY:--}"
 if [[ "$identity" != "-" ]]; then
@@ -78,6 +78,6 @@ else
     exit 1
   fi
   echo "Replaced /Applications/TapThatX.app (identity: $identity)."
-  # Relaunch the replaced app; it is a menu-bar accessory, so `open` starts it without a Dock icon.
+  # Relaunch the regular app and show its main window.
   open /Applications/TapThatX.app
 fi

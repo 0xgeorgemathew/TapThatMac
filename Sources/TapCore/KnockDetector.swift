@@ -16,6 +16,7 @@ private struct PulseDetector {
     private var latched = false
     private var lastImpact = -Double.infinity
     private var candidateTime: Double?
+    var pendingOnset: Double? { candidateTime }
     private var candidateThreshold = 0.0
     private var candidatePeak = 0.0
     private var candidateRiseRate = 0.0
@@ -56,7 +57,7 @@ private struct PulseDetector {
         // must also satisfy the stricter impulse rise-rate and duration gates.
         // Keep an absolute guard so increasing sensitivity cannot chase sensor noise.
         let amplitudeFloor = lightTapMode
-            ? max(0.003, settings.amplitudeFloor * 0.625)
+            ? max(DetectorSettings.minimumAmplitudeFloor * 0.625, settings.amplitudeFloor * 0.625)
             : settings.amplitudeFloor
         threshold = max(amplitudeFloor, baseline * 4.5)
         warmingUp = sample.time - startTime < 1.5
@@ -90,7 +91,7 @@ private struct PulseDetector {
         // sharp onset, short duration and quiet rearming are still required.
         let contrast = settings.amplitudeFloor < 0.0175 ? feature : shortAverage
         guard !warmingUp, !latched, feature >= threshold,
-              contrast / max(baseline, 0.001) >= 2.5,
+              contrast / max(baseline, min(0.001, amplitudeFloor / 2.5)) >= 2.5,
               sample.time - lastImpact >= 0.09 else { return false }
         // Confirm a short pulse on its falling edge, then require quiet before
         // rearming. A threshold crossing alone accepts shaking and ring echoes.
@@ -126,6 +127,12 @@ public struct KnockDetector {
     }
     public var feature: Double { envelope.feature }
     public var threshold: Double { envelope.threshold }
+    public var impulseFeature: Double? { settings.amplitudeFloor < 0.0175 ? impulse.feature : nil }
+    public var impulseThreshold: Double? { settings.amplitudeFloor < 0.0175 ? impulse.threshold : nil }
+    public var pendingOnset: Double? {
+        [envelope.pendingOnset, settings.amplitudeFloor < 0.0175 ? impulse.pendingOnset : nil]
+            .compactMap { $0 }.min()
+    }
     public var warmingUp: Bool { envelope.warmingUp }
     public init() {}
     public mutating func reset() {
@@ -144,7 +151,9 @@ public struct KnockDetector {
                         light ? impulse.acceptedOnset : .infinity)
         // Real Mac chassis traces contain a second ring 90–105 ms after one
         // finger contact. It is neither a new tap nor useful pair input.
-        guard onset - acceptedOnset >= 0.14 else { return false }
+        // Leave a small margin beyond those echoes without swallowing deliberate
+        // 120–130 ms pairs. Pulse shape and quiet rearming still apply per path.
+        guard onset - acceptedOnset >= 0.11 else { return false }
         acceptedOnset = onset
         acceptedPath = light ? "impulse" : "envelope"
         return true

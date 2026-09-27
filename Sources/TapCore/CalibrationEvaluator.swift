@@ -11,7 +11,7 @@ public struct CalibrationScore: Codable {
 public enum CalibrationEvaluator {
     /// No imported examples or detector-generated truth. Evaluate only confirmed fresh trials.
     public static func score(_ trial: CalibrationTrial, floor: Double) throws -> CalibrationScore {
-        guard trial.confirmed, trial.quality.usable, floor.isFinite, (0.005...0.07).contains(floor) else {
+        guard trial.confirmed, trial.quality.usable, floor.isFinite, (DetectorSettings.minimumAmplitudeFloor...DetectorSettings.maximumAmplitudeFloor).contains(floor) else {
             throw CalibrationError.invalidTrial
         }
         var settings = DetectorSettings()
@@ -22,7 +22,7 @@ public enum CalibrationEvaluator {
     public static func score(_ trial: CalibrationTrial, settings: DetectorSettings) throws -> CalibrationScore {
         guard trial.confirmed, trial.quality.usable,
               settings.amplitudeFloor.isFinite,
-              (0.005...0.07).contains(settings.amplitudeFloor),
+              (DetectorSettings.minimumAmplitudeFloor...DetectorSettings.maximumAmplitudeFloor).contains(settings.amplitudeFloor),
               (0.5...20).contains(settings.minimumRiseRate),
               (1...30).contains(settings.impulseMinimumRiseRate),
               (0.018...0.05).contains(settings.maximumPulseDuration),
@@ -55,10 +55,10 @@ public enum CalibrationEvaluator {
         guard training.map(\.step) == steps.filter({ $0.partition == .training }) else {
             throw CalibrationError.incomplete
         }
-        // Prefer the largest amplitude margin, then the strongest declared shape
+        // Prefer the highest floor, then the strongest declared shape
         // profile that still preserves every independently labelled contact. Keep
         // this list deliberately small: a short session cannot justify a broad grid.
-        let floors = [0.07, 0.05, 0.035, 0.025, 0.02, 0.0175, 0.014, 0.011, 0.008, 0.006, 0.005]
+        let floors = [0.07, 0.05, 0.035, 0.025, 0.02, 0.0175, 0.014, 0.011, 0.008, 0.006, 0.005, 0.004, 0.003, 0.002]
         let shapes = [
             (maximumDuration: 0.022, envelopeRise: 8.0, impulseRise: 12.0),
             (maximumDuration: 0.028, envelopeRise: 8.0, impulseRise: 12.0),
@@ -99,7 +99,8 @@ public enum CalibrationEvaluator {
     ) throws -> Bool {
         let verification = trials.filter { $0.step.partition == .verification && $0.confirmed }
         let steps = expectedSteps ?? CalibrationStep.sequence
-        guard verification.map(\.step) == steps.filter({ $0.partition == .verification }) else {
+        guard !verification.isEmpty,
+              verification.map(\.step) == steps.filter({ $0.partition == .verification }) else {
             throw CalibrationError.incomplete
         }
         return try verification.allSatisfy { try score($0, settings: frozenSettings).passed }

@@ -7,8 +7,8 @@ struct ActionsPane: View {
     var body: some View {
         PaneScaffold {
             VStack(alignment: .leading, spacing: 24) {
-                PaneHeader(title: "Double-tap action",
-                           detail: "Choose one action, or open the ring to choose each time.")
+            PaneHeader(title: "Actions",
+                       detail: "Choose what a double-tap does.")
 
                 VStack(spacing: 20) {
                     actionPickerCard
@@ -23,7 +23,7 @@ struct ActionsPane: View {
                         assistantCard
                     }
 
-                    systemActionsCard
+                    previewCard
                 }
             }
         }
@@ -46,10 +46,8 @@ struct ActionsPane: View {
     private var ringHelpCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Double-tap opens all actions. Single tap moves clockwise; double-tap chooses the highlighted action.")
-            Text("Right / Down move clockwise. Left / Up move counterclockwise. All arrows wrap around. Return chooses; Escape cancels. You can also point and click.")
+            Text("Single tap advances. Double-tap or Return selects. Escape cancels.")
                 .font(.callout).foregroundStyle(.secondary)
-            Text("Single taps move after a short pause so a double-tap can choose without moving first.")
-                .font(.caption).foregroundStyle(.secondary)
         }
         .reactorCard()
     }
@@ -72,19 +70,13 @@ struct ActionsPane: View {
         .reactorCard()
     }
 
-    private var systemActionsCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Toggle("Enable system actions", isOn: $model.actionsEnabled)
-                .toggleStyle(.switch)
-                // Native control, accent-tinted so the switch matches
-                // the one accent when on.
-                .tint(ReactorTheme.accent)
-            Text("Settings and recordings temporarily pause actions. Enable & close finishes calibration and resumes your selected behavior.")
+    private var previewCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Safe preview").font(.headline)
+            Text("Explore the ring without running its actions, in every mode.")
                 .font(.callout).foregroundStyle(.secondary)
-            Button("Preview ring") { model.previewRing() }
+            Button("Preview command ring") { model.previewRing() }
                 .buttonStyle(.reactorButton(prominent: true))
-            Text("Left and right labels are available for recording. They do not yet select different actions.")
-                .font(.caption).foregroundStyle(.secondary)
         }
         .reactorCard()
     }

@@ -2,11 +2,15 @@ import SwiftUI
 import TapCore
 
 /// Calibration is intentionally an immersive gesture surface, not a form.
-/// The only choices exposed to the user are starting, retrying, or leaving.
+/// Choose the physical setup before collecting gestures and desk disturbances.
 struct CalibrationPane: View {
     @ObservedObject var model: AppModel
     @ObservedObject var calibration: CalibrationController
     var onDismissOnboarding: () -> Void = {}
+    @State private var deskSetup = DeskSetup.openMac
+    private var sessionSetup: DeskSetup {
+        calibration.session.flatMap { DeskSetup(rawValue: $0.context.surface) } ?? deskSetup
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -35,7 +39,6 @@ struct CalibrationPane: View {
         HStack {
             Button {
                 if calibration.blocksActions { model.cancelCalibration() }
-                model.markCalibrationOnboardingSeen()
                 onDismissOnboarding()
             } label: {
                 Image(systemName: "xmark")
@@ -75,15 +78,20 @@ struct CalibrationPane: View {
             GestureIndicator(activity: .lightPair, isActive: true, reduceMotion: reduceMotion)
 
             VStack(spacing: 10) {
-                Text("Four taps. That's it.")
+                Text("Tune for your desk.")
                     .font(.system(size: 36, weight: .semibold, design: .rounded))
                     .tracking(-1.1)
-                Text("Light tap. Tap. Single. Double.")
+                Text("Use your normal desk setup, with the lid open or an external display active. Tap the Mac or desk where you want commands to work. Lap use is not supported.")
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
 
-            Button("Begin") { model.beginCalibration() }
+            Picker("Desk setup", selection: $deskSetup) {
+                ForEach(DeskSetup.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+
+            Button("Begin") { model.beginCalibration(setup: deskSetup) }
                 .buttonStyle(.reactorButton(prominent: true))
                 .disabled(!model.canStartCalibration)
         }
@@ -93,11 +101,15 @@ struct CalibrationPane: View {
     private var gestureMoment: some View {
         VStack(spacing: 34) {
             if let activity = calibration.step?.activity {
-                GestureIndicator(
-                    activity: activity,
-                    isActive: calibration.prompt == "Tap now",
-                    reduceMotion: reduceMotion
-                )
+                if activity.expectedContacts == 0 {
+                    Image(systemName: activity == .surfaceBump ? "table.furniture" : "keyboard")
+                        .font(.system(size: 60, weight: .light))
+                        .foregroundStyle(ReactorTheme.accent)
+                        .frame(height: 150)
+                } else {
+                    GestureIndicator(activity: activity, isActive: calibration.prompt == "Tap now",
+                                     reduceMotion: reduceMotion)
+                }
 
                 VStack(spacing: 11) {
                     Text(displayName(for: activity))
@@ -123,7 +135,7 @@ struct CalibrationPane: View {
                     .transition(.scale.combined(with: .opacity))
             } else {
                 HStack(spacing: 12) {
-                    Text("Try that once more").foregroundStyle(.secondary)
+                    Text(calibration.review?.quality.issues.first ?? "The expected contacts were not captured. Try again.").foregroundStyle(.secondary)
                     Button("Retry") { calibration.retry() }
                         .buttonStyle(.reactorButtonCompact(prominent: true))
                 }
@@ -174,14 +186,15 @@ struct CalibrationPane: View {
             VStack(spacing: 9) {
                 Text("Let's try again")
                     .font(.system(size: 36, weight: .semibold, design: .rounded))
-                Text("Make the light tap softer and the firm tap more distinct.")
+                Text(calibration.message)
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
 
             Button("Start over") {
+                let setup = sessionSetup
                 model.cancelCalibration()
-                model.beginCalibration()
+                model.beginCalibration(setup: setup)
             }
             .buttonStyle(.reactorButton(prominent: true))
         }
@@ -190,7 +203,7 @@ struct CalibrationPane: View {
     @ViewBuilder private var footer: some View {
         if calibration.stage == .idle {
             VStack(spacing: 7) {
-                Text("Four gestures. About 30 seconds.")
+                Text("About two minutes, including a fresh verification round.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 if let reason = model.calibrationUnavailableReason {
@@ -204,7 +217,9 @@ struct CalibrationPane: View {
                 .font(.caption)
                 .foregroundStyle(.red)
         } else {
-            Text("Processed on this Mac")
+            Text(calibration.step?.partition == .verification
+                 ? "Verifying fresh recordings · Settings are fixed"
+                 : "Learning this desk setup · Processed on this Mac")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -260,19 +275,20 @@ struct CalibrationPane: View {
         switch activity {
         case .lightTap: "Light tap"
         case .lightPair: "Light double tap"
-        case .knock: "Tap"
-        case .knockPair: "Double tap"
+        case .knock: "Knock"
+        case .knockPair: "Double knock"
         default: activity.title
         }
     }
 
     private func instruction(for activity: CalibrationActivity) -> String {
+        let location = sessionSetup == .externalDisplay ? "on the desk" : "where you want commands to work: on the Mac or desk"
         switch activity {
-        case .lightTap: "Tap once, gently."
-        case .lightPair: "Tap twice, gently. A quick one-two."
-        case .knock: "Tap once, naturally."
-        case .knockPair: "Tap twice, naturally. A quick one-two."
-        default: activity.instruction
+        case .lightTap: return "Tap once, gently, \(location)."
+        case .lightPair: return "Tap twice, gently, \(location). A quick one-two."
+        case .knock: return "Knock once \(location)."
+        case .knockPair: return "Knock twice \(location). A quick one-two."
+        default: return activity.instruction
         }
     }
 }

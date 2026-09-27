@@ -35,6 +35,19 @@ final class GestureAndBufferTests: XCTestCase {
         _ = router.knock(at: 1.5)
         XCTAssertEqual(router.advance(to: 2), .single)
     }
+    func testPendingPulseProtectsPairDeadlineAndReleasesAfterRejection() {
+        var router = GestureRouter()
+        _ = router.knock(at: 1)
+        XCTAssertTrue(router.hasPendingTap)
+        XCTAssertNil(router.advance(wallTime: 1.53, processedSensorTime: 1.53, pendingOnset: 1.44))
+        XCTAssertEqual(router.advance(wallTime: 1.54, processedSensorTime: 1.54), .single)
+        XCTAssertFalse(router.hasPendingTap)
+        router.reset()
+        _ = router.knock(at: 2)
+        XCTAssertEqual(router.knock(at: 2.25), [.double])
+        XCTAssertFalse(router.hasPendingTap)
+    }
+
     func testInboxRejectsOldConnectionAndDrainsOnce() {
         let inbox = SensorInbox()
         inbox.reset(generation: 2)

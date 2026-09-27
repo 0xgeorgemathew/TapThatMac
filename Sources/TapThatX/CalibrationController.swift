@@ -34,8 +34,13 @@ final class CalibrationController: ObservableObject {
     var reviewMatchesExpectedGesture: Bool {
         guard canConfirm, var trial = review else { return false }
         trial.confirmed = true
+        // Negative trials teach rejection; the unfitted detector must not veto
+        // collecting the very disturbances it currently mistakes for taps.
+        if trial.step.activity.expectedContacts == 0 { return true }
+        // Always evaluate verification against the frozen profile, not a new fit.
+        if trial.step.partition == .verification { return true }
         var permissive = DetectorSettings()
-        permissive.sensitivity = DetectorSettings.sensitivity(forAmplitudeFloor: 0.005)
+        permissive.sensitivity = DetectorSettings.sensitivity(forAmplitudeFloor: DetectorSettings.minimumAmplitudeFloor)
         permissive.minimumRiseRate = 0.5
         permissive.impulseMinimumRiseRate = 1
         permissive.maximumPulseDuration = 0.05
@@ -123,12 +128,23 @@ final class CalibrationController: ObservableObject {
         let count = next.trials.filter(\.confirmed).count
         do {
             let sessionSteps = CalibrationStep.sequence
-            if count == sessionSteps.count {
+            let trainingCount = sessionSteps.filter { $0.partition == .training }.count
+            if count == trainingCount {
                 next.candidateSettings = try CalibrationEvaluator.candidateSettings(
                     from: next.trials, expectedSteps: sessionSteps)
                 next.candidateFloor = next.candidateSettings?.amplitudeFloor
-                next.verificationPassed = next.candidateSettings != nil
-                next.finished = true
+                next.finished = next.candidateSettings == nil
+            }
+            if trial.step.partition == .verification, let frozen = next.candidateSettings {
+                // A failed holdout ends this fit. Retrying until it passes would
+                // hide natural variation and turn verification into more training.
+                let passed = try CalibrationEvaluator.score(trial, settings: frozen).passed
+                if !passed { next.finished = true }
+                else if count == sessionSteps.count {
+                    next.verificationPassed = try CalibrationEvaluator.verify(
+                        next.trials, frozenSettings: frozen, expectedSteps: sessionSteps)
+                    next.finished = true
+                }
             }
             try persist(next)
             session = next; review = nil; saveError = nil
@@ -136,7 +152,7 @@ final class CalibrationController: ObservableObject {
                 stage = next.verificationPassed ? .complete : .failed
                 message = next.verificationPassed
                     ? "Your taps are ready."
-                    : "Those gestures were too close to separate reliably. Try again with a clearer difference between light and firm taps."
+                    : "This profile could not preserve your taps while rejecting the recorded desk activity. Keep the Mac in its usual desk position and try a fresh session."
             } else {
                 stage = .ready
                 message = ""

@@ -5,11 +5,18 @@ import TapCore
 
 final class CalibrationControllerTests: XCTestCase {
     private var directory: URL!
+    private var defaults: UserDefaults!
+    private var suiteName: String!
     override func setUpWithError() throws {
         directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        suiteName = "TapThatXTests-\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suiteName)!
     }
-    override func tearDownWithError() throws { try? FileManager.default.removeItem(at: directory) }
+    override func tearDownWithError() throws {
+        defaults.removePersistentDomain(forName: suiteName)
+        try? FileManager.default.removeItem(at: directory)
+    }
     private func controller() -> CalibrationController {
         let directory = directory!
         let c = CalibrationController(directory: { directory })
@@ -17,6 +24,14 @@ final class CalibrationControllerTests: XCTestCase {
             input: "Test", requestedRate: 800, initialSettings: DetectorSettings()))
         return c
     }
+
+    func testOperatingModeMigrationPreservesSavedAndLegacyIntent() {
+        XCTAssertEqual(OperatingModeMigration.restore(savedMode: "Test", wasPaused: false, actionsEnabled: true), .test)
+        XCTAssertEqual(OperatingModeMigration.restore(savedMode: nil, wasPaused: true, actionsEnabled: false), .paused)
+        XCTAssertEqual(OperatingModeMigration.restore(savedMode: nil, wasPaused: false, actionsEnabled: false), .test)
+        XCTAssertEqual(OperatingModeMigration.restore(savedMode: nil, wasPaused: false, actionsEnabled: true), .active)
+    }
+
     private func record(_ c: CalibrationController, at start: Double = 100, contacts: Bool = true) {
         let step = c.step!
         c.record(at: start)
@@ -75,19 +90,44 @@ final class CalibrationControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testAppBlocksActionsAndEnableCloseAcrossCalibration() {
+    func testCalibrationBlocksAndRestoresTheSelectedMode() {
         _ = NSApplication.shared
         let c = controller()
-        let model = AppModel(startServices: false, calibration: c)
-        model.actionsEnabled = false
-        XCTAssertEqual(model.actionBlockReason, "Recording: actions paused")
-        model.enableAndCloseSettings()
-        XCTAssertFalse(model.actionsEnabled)
-        model.previewRing()
-        XCTAssertFalse(model.ring.isOpen)
-        record(c)
-        XCTAssertEqual(model.actionBlockReason, "Recording: actions paused")
+        let model = AppModel(startServices: false, calibration: c, modeDefaults: defaults)
+        model.operatingMode = .active
+        model.accessibilityPermission = true
+        XCTAssertEqual(model.actionBlockReason, "Calibration in progress")
+        XCTAssertTrue(c.cancel(at: 100))
+        XCTAssertEqual(model.operatingMode, .active)
+        XCTAssertNil(model.actionBlockReason)
         model.shutdown()
+        XCTAssertTrue(model.isShutdown)
+    }
+
+    @MainActor
+    func testWindowVisibilityDoesNotChangeActionEligibility() {
+        _ = NSApplication.shared
+        let model = AppModel(startServices: false, modeDefaults: defaults)
+        model.operatingMode = .active
+        model.accessibilityPermission = true
+        let before = model.actionBlockReason
+        let hiddenWindow = NSWindow(contentRect: .zero, styleMask: [], backing: .buffered, defer: true)
+        model.setupWindow = hiddenWindow
+        XCTAssertFalse(model.setupWindow?.isVisible ?? true)
+        XCTAssertEqual(model.actionBlockReason, before)
+        model.shutdown()
+    }
+
+    @MainActor
+    func testShutdownFinishesCaptureAndIsSafeToRepeat() {
+        _ = NSApplication.shared
+        let model = AppModel(startServices: false, modeDefaults: defaults)
+        model.diagnostics.startCapture(label: "test", purpose: "test", simulated: false, expectedDoubleKnocks: 0)
+        XCTAssertNotNil(model.diagnostics.current)
+        model.shutdown()
+        XCTAssertNil(model.diagnostics.current)
+        model.shutdown()
+        XCTAssertTrue(model.isShutdown)
     }
 
     func testNewSessionsNeverOverwriteEarlierRecordings() throws {
@@ -98,7 +138,7 @@ final class CalibrationControllerTests: XCTestCase {
         XCTAssertNotEqual(first, c.archiveURL); XCTAssertTrue(FileManager.default.fileExists(atPath: first.path))
     }
 
-    func testFourGestureFlowBuildsProfileAndRequiresExplicitApplication() throws {
+    func testDeskCalibrationBuildsVerifiedProfileAndRequiresExplicitApplication() throws {
         let c = controller()
         for index in CalibrationStep.sequence.indices {
             record(c, at: 100 + Double(index) * 20)
@@ -109,22 +149,58 @@ final class CalibrationControllerTests: XCTestCase {
         XCTAssertEqual(c.stage, .complete); XCTAssertFalse(c.applied)
         XCTAssertTrue(c.session?.verificationPassed == true); XCTAssertFalse(c.blocksActions)
         let disk = try JSONDecoder().decode(CalibrationSession.self, from: Data(contentsOf: XCTUnwrap(c.archiveURL)))
-        XCTAssertTrue(disk.verificationPassed); XCTAssertEqual(disk.trials.count, 4)
+        XCTAssertTrue(disk.verificationPassed); XCTAssertEqual(disk.trials.count, c.steps.count)
     }
 
     func testMissingGestureCannotProduceAnApplicableSetting() {
         let c = controller()
         for index in CalibrationStep.sequence.indices {
-            record(c, at: 100 + Double(index) * 20, contacts: index != 2)
+            guard c.stage == .ready else { break }
+            record(c, at: 100 + Double(index) * 20, contacts: c.step?.activity != .lightTap)
             c.confirm()
         }
         XCTAssertEqual(c.stage, .failed); XCTAssertFalse(c.session?.verificationPassed ?? true)
         XCTAssertFalse(c.applied)
     }
 
-    func testCurrentFlowContainsOnlyTheFourRequestedGestures() {
+    func testSettingsFreezeBeforeVerificationAndAMissedVerificationDoesNotRefit() throws {
         let c = controller()
-        XCTAssertEqual(c.steps.map(\.activity), [.lightTap, .lightPair, .knock, .knockPair])
-        XCTAssertTrue(c.steps.allSatisfy { $0.responseDuration == 2.5 })
+        var time = 100.0
+        while c.step?.partition == .training, c.stage == .ready {
+            record(c, at: time); c.confirm(); time += 20
+        }
+        XCTAssertEqual(c.stage, .ready)
+        XCTAssertFalse(c.session?.verificationPassed ?? true)
+        let frozen = try XCTUnwrap(c.candidateSettings)
+        while c.stage == .ready {
+            record(c, at: time, contacts: false); c.confirm(); time += 20
+        }
+        XCTAssertEqual(c.stage, .failed)
+        XCTAssertEqual(c.candidateSettings, frozen)
+        XCTAssertFalse(c.session?.verificationPassed ?? true)
+    }
+
+    func testUnwantedContactInVerificationCannotQualifyAProfile() {
+        let c = controller()
+        var time = 100.0
+        while c.stage == .ready {
+            guard let step = c.step else { break }
+            record(c, at: time)
+            if step.partition == .verification, step.activity.expectedContacts == 0 {
+                // Add an actual impact using a separately recorded positive-shaped trial below.
+                c.retry()
+                c.record(at: time + 20)
+                for index in 0..<Int(step.duration * 800) {
+                    let t = Double(index) / 800
+                    c.append([.init(time: time + 20 + t, x: (2.8..<2.812).contains(t) ? 0.08 : 0, y: 0, z: 1)],
+                             receivedAt: time + 20 + t)
+                }
+                c.tick(at: time + 20 + step.duration + 0.25)
+                time += 20
+            }
+            c.confirm(); time += 20
+        }
+        XCTAssertEqual(c.stage, .failed)
+        XCTAssertFalse(c.session?.verificationPassed ?? true)
     }
 }

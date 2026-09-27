@@ -12,11 +12,17 @@ do {
     guard size <= 64_000_000 else { throw CalibrationError.invalidTrial }
     let session = try JSONDecoder().decode(CalibrationSession.self, from: Data(contentsOf: url))
     guard session.trials.count <= 48 else { throw CalibrationError.incomplete }
-    let steps = session.schemaVersion >= 3
-        ? CalibrationStep.sequence
+    let steps = session.schemaVersion >= 5 ? CalibrationStep.sequence
+        : session.schemaVersion >= 3 ? CalibrationStep.fourGestureSequence
         : CalibrationStep.sequence(includingSurfaceBumps: session.context.includesSurfaceBumps)
     let settings: DetectorSettings
-    if session.schemaVersion == 4, session.detectorVersion == "light-impulse-profile-v4",
+    if session.schemaVersion == 5, session.detectorVersion == "desk-verified-profile-v5",
+       session.finished, let frozen = session.candidateSettings {
+        guard try CalibrationEvaluator.candidateSettings(from: session.trials, expectedSteps: steps) == frozen else {
+            throw CalibrationError.invalidTrial
+        }
+        settings = frozen
+    } else if session.schemaVersion == 4, session.detectorVersion == "light-impulse-profile-v4",
        session.finished, let frozen = session.candidateSettings {
         guard try CalibrationEvaluator.candidateSettings(from: session.trials, expectedSteps: steps) == frozen else {
             throw CalibrationError.invalidTrial
@@ -46,6 +52,10 @@ do {
     for trial in session.trials where trial.confirmed {
         let score = try CalibrationEvaluator.score(trial, settings: settings)
         print("\(trial.step.partition.rawValue) | \(trial.step.activity.title): \(score.passed ? "PASS" : "FAIL"); contacts \(score.matched)/\(score.expected), unexpected \(score.unexpected), pairs \(score.pairs)")
+    }
+    guard steps.contains(where: { $0.partition == .verification }) else {
+        print("Training-only replay: this older session has no independent verification recordings.")
+        exit(1)
     }
     let passed = try CalibrationEvaluator.verify(session.trials, frozenSettings: settings, expectedSteps: steps)
     print("Frozen profile: \(settings.amplitudeFloor) g floor, \(Int(settings.maximumPulseDuration * 1_000)) ms pulse. Verification: \(passed ? "passed" : "failed").")

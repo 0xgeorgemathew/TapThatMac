@@ -1,5 +1,10 @@
 import Foundation
 
+public enum DeskSetup: String, CaseIterable {
+    case openMac = "Open Mac on desk"
+    case externalDisplay = "Closed Mac · external display"
+}
+
 public enum CalibrationActivity: String, Codable, CaseIterable {
     case quiet, everydayMotion, surfaceBump, lightTap, knock, lightPair, knockPair
 
@@ -24,7 +29,7 @@ public enum CalibrationActivity: String, Codable, CaseIterable {
     public var instruction: String {
         switch self {
         case .quiet: return "Leave your hands off the surface and keep still."
-        case .everydayMotion: return "Use your keyboard and trackpad normally. Move your hands as usual, without deliberate taps or knocks."
+        case .everydayMotion: return "Type, click, rest your hands, and place an everyday object on the desk. Do not make command taps or knocks."
         case .surfaceBump: return "Gently nudge the table with your leg, shift your chair, and rest your hands normally. Do not tap the chosen surface with your hands."
         case .lightTap: return "When “Tap now” appears, touch the chosen surface once with your finger pad, then lift your hand."
         case .knock: return "When “Tap now” appears, knock once with your knuckle or nail, then lift your hand."
@@ -44,18 +49,24 @@ public struct CalibrationStep: Codable, Equatable {
     public init(_ activity: CalibrationActivity, _ partition: CalibrationPartition) {
         self.activity = activity; self.partition = partition
     }
-    /// The complete user-facing calibration. Each trial also contains a short
-    /// pre-cue baseline, so the detector can reject motion around the gesture
-    /// without asking the user to perform separate negative-data exercises.
+    /// Fit against intended contacts and desk disturbances, then check fresh
+    /// repetitions without changing the fitted settings.
     public static let sequence: [CalibrationStep] = [
-        .init(.lightTap, .training),
-        .init(.lightPair, .training),
-        .init(.knock, .training),
-        .init(.knockPair, .training)
+        .init(.everydayMotion, .training), .init(.surfaceBump, .training),
+        .init(.lightTap, .training), .init(.lightPair, .training),
+        .init(.knock, .training), .init(.knockPair, .training),
+        .init(.everydayMotion, .verification), .init(.surfaceBump, .verification),
+        .init(.lightTap, .verification), .init(.lightPair, .verification),
+        .init(.knock, .verification), .init(.knockPair, .verification)
+    ]
+
+    public static let fourGestureSequence: [CalibrationStep] = [
+        .init(.lightTap, .training), .init(.lightPair, .training),
+        .init(.knock, .training), .init(.knockPair, .training)
     ]
 
     /// Preserves replay support for sessions created by the earlier extended
-    /// calibration. New sessions never expose these extra exercises.
+    /// calibration, whose repetitions differ from the current desk flow.
     public static let legacySequence: [CalibrationStep] = [
         .init(.quiet, .training), .init(.everydayMotion, .training),
         .init(.lightTap, .training), .init(.lightTap, .training), .init(.lightTap, .training),
@@ -144,7 +155,7 @@ public struct CalibrationSession: Codable {
     public var verificationPassed = false
     public var finished = false
     public init(context: CalibrationContext) {
-        schemaVersion = 4; detectorVersion = "light-impulse-profile-v4"
+        schemaVersion = 5; detectorVersion = "desk-verified-profile-v5"
         id = UUID(); created = Date(); self.context = context
     }
 }

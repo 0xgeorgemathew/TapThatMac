@@ -79,22 +79,31 @@ final class BaselineInteractionTests: XCTestCase {
         XCTAssertEqual(router.knock(at: 2), [])
         XCTAssertEqual(router.knock(at: 2.2), [.double])
     }
-    func testEveryBlockingSettingIsExplicitAndRecordingDoesNotChangeEnabledPreference() {
-        func reason(_ flags: [Bool]) -> String? {
-            ActionAvailability.blockReason(calibration: flags[0], settingsOpen: flags[1],
-                simulated: flags[2], paused: flags[3], inactive: flags[4],
-                recording: flags[5], enabled: !flags[6], monitoringOnly: flags[7])
+    func testOperatingModesAndActionBlockersAreExplicit() {
+        XCTAssertNil(ActionAvailability.blockReason(mode: .active, calibration: false,
+            simulated: false, inactive: false, monitoringOnly: false))
+        XCTAssertEqual(ActionAvailability.blockReason(mode: .test, calibration: false,
+            simulated: false, inactive: false, monitoringOnly: false), "Test mode: system actions are off")
+        XCTAssertEqual(ActionAvailability.blockReason(mode: .paused, calibration: false,
+            simulated: false, inactive: false, monitoringOnly: false), "Recognition paused")
+        XCTAssertEqual(ActionAvailability.blockReason(mode: .active, calibration: true,
+            simulated: false, inactive: false, monitoringOnly: false), "Calibration in progress")
+        XCTAssertNotNil(ActionAvailability.blockReason(mode: .active, calibration: false,
+            simulated: true, inactive: false, monitoringOnly: false))
+        XCTAssertNotNil(ActionAvailability.blockReason(mode: .active, calibration: false,
+            simulated: false, inactive: true, monitoringOnly: false))
+        XCTAssertNotNil(ActionAvailability.blockReason(mode: .active, calibration: false,
+            simulated: false, inactive: false, monitoringOnly: true))
+    }
+
+    func testPreviewAlwaysDisablesExecution() {
+        XCTAssertTrue(ActionAvailability.canExecute(preview: false, blockReason: nil))
+        for mode in ActionAvailability.Mode.allCases {
+            let reason = ActionAvailability.blockReason(mode: mode, calibration: false,
+                simulated: false, inactive: false, monitoringOnly: false)
+            XCTAssertFalse(ActionAvailability.canExecute(preview: true, blockReason: reason), mode.rawValue)
         }
-        let ready = Array(repeating: false, count: 8)
-        XCTAssertNil(reason(ready))
-        for index in ready.indices {
-            var blocked = ready; blocked[index] = true
-            XCTAssertNotNil(reason(blocked), "Blocker \(index)")
-        }
-        var recording = ready; recording[5] = true
-        XCTAssertEqual(reason(recording), "Recording: actions paused")
-        recording[5] = false
-        XCTAssertNil(reason(recording))
+        XCTAssertFalse(ActionAvailability.canExecute(preview: false, blockReason: "Recognition paused"))
     }
     func testScreenshotApprovalLabelsAreRecognized() {
         XCTAssertEqual(AssistantControls.match(.accept, labels: [["Deny"], ["Allow once"]]), 1)

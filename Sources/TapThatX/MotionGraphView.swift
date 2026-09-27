@@ -35,6 +35,7 @@ final class MotionGraphNSView: NSView {
     private var tracking: NSTrackingArea?
     private let reactor = NSColor(calibratedRed: 0.404, green: 0.780, blue: 0.922, alpha: 1)
     private let gold = NSColor(calibratedRed: 0.851, green: 0.639, blue: 0.255, alpha: 1)
+    private let violet = NSColor(calibratedRed: 0.80, green: 0.64, blue: 1, alpha: 1)
     private let axisText = NSColor.white.withAlphaComponent(0.65)
     private var plot: NSRect { NSRect(x: 54, y: 36, width: max(1, bounds.width - 74), height: max(1, bounds.height - 110)) }
     override var acceptsFirstResponder: Bool { true }
@@ -145,6 +146,8 @@ final class MotionGraphNSView: NSView {
         let points = snapshot.visiblePoints(duration: duration)
         let waveform = NSBezierPath()
         let adaptive = NSBezierPath()
+        let light = NSBezierPath()
+        let lightGate = NSBezierPath()
         var previous: MotionTrace.Point?
         for point in points {
             let x = plot.maxX - (time - point.time) / duration * plot.width
@@ -153,6 +156,13 @@ final class MotionGraphNSView: NSView {
             if previous == nil || point.time - previous!.time > 0.1 {
                 waveform.move(to: p); adaptive.move(to: t)
             } else { waveform.line(to: p); adaptive.line(to: t) }
+            if let peak = point.impulsePeak, let gate = point.impulseThreshold {
+                let lp = NSPoint(x: x, y: y(peak))
+                let lg = NSPoint(x: x, y: y(gate))
+                if previous?.impulsePeak == nil || point.time - (previous?.time ?? 0) > 0.1 {
+                    light.move(to: lp); lightGate.move(to: lg)
+                } else { light.line(to: lp); lightGate.line(to: lg) }
+            }
             previous = point
         }
         if model.sampleRate < 50 {
@@ -167,6 +177,9 @@ final class MotionGraphNSView: NSView {
         reactor.setStroke(); waveform.lineWidth = 1.6; waveform.stroke()
         gold.withAlphaComponent(0.55).setStroke()
         adaptive.setLineDash([3, 4], count: 2, phase: 0); adaptive.lineWidth = 1; adaptive.stroke()
+        violet.withAlphaComponent(0.85).setStroke(); light.lineWidth = 1; light.stroke()
+        violet.withAlphaComponent(0.6).setStroke()
+        lightGate.setLineDash([1, 4], count: 2, phase: 0); lightGate.lineWidth = 1; lightGate.stroke()
         let value = draftThreshold ?? snapshot.minimum
         let line = NSBezierPath()
         line.move(to: NSPoint(x: plot.minX, y: y(value))); line.line(to: NSPoint(x: plot.maxX, y: y(value)))
@@ -195,6 +208,10 @@ final class MotionGraphNSView: NSView {
                 NSBezierPath(ovalIn: NSRect(x: x - 3, y: y(point.peak) - 3, width: 6, height: 6)).fill()
                 text(String(format: "−%.2fs  PEAK %.4f g  GATE %.4f g", time - point.time, point.peak, point.threshold),
                      x: 16, y: bounds.height - 47, color: reactor)
+                if let peak = point.impulsePeak, let gate = point.impulseThreshold {
+                    text(String(format: "LIGHT IMPULSE %.4f g · GATE %.4f g", peak, gate),
+                         x: 16, y: bounds.height - 63, color: violet, size: 9)
+                }
             } else {
                 text("NO SAMPLE HERE · GAP IN SIGNAL", x: 16, y: bounds.height - 47, color: axisText)
             }
@@ -208,6 +225,9 @@ final class MotionGraphNSView: NSView {
         // animate with contentTransition(.numericText()).
         text("−\(Int(duration))s", x: plot.minX, y: 12, color: axisText)
         text(scale == .detail ? "MOTION (g) · NONLINEAR" : "MOTION (g) · LINEAR", x: plot.minX + 58, y: 12, color: axisText)
+        if points.contains(where: { $0.impulsePeak != nil }), plot.width > 400 {
+            text("VIOLET: LIGHT IMPULSE", x: plot.minX + 300, y: 12, color: violet, size: 9)
+        }
         text(heldSnapshot == nil ? "NOW" : "HELD", x: plot.maxX - 28, y: 12, color: axisText)
     }
 
@@ -223,7 +243,9 @@ final class MotionGraphNSView: NSView {
     override func mouseDragged(with event: NSEvent) {
         guard draftThreshold != nil else { return }
         let location = convert(event.locationInWindow, from: nil)
-        draftThreshold = min(0.07, max(0.005, scale.amplitude(at: Double((location.y - plot.minY) / plot.height))))
+        draftThreshold = min(DetectorSettings.maximumAmplitudeFloor,
+                             max(DetectorSettings.minimumAmplitudeFloor,
+                                 scale.amplitude(at: Double((location.y - plot.minY) / plot.height))))
         needsDisplay = true
     }
     override func mouseUp(with event: NSEvent) {
@@ -246,8 +268,8 @@ final class MotionGraphNSView: NSView {
         needsDisplay = true
     }
     override func accessibilityValue() -> Any? { heldSnapshot?.minimum ?? model?.amplitudeFloor }
-    override func accessibilityMinValue() -> Any? { 0.005 }
-    override func accessibilityMaxValue() -> Any? { 0.07 }
+    override func accessibilityMinValue() -> Any? { DetectorSettings.minimumAmplitudeFloor }
+    override func accessibilityMaxValue() -> Any? { DetectorSettings.maximumAmplitudeFloor }
     override func accessibilityPerformIncrement() -> Bool {
         guard heldSnapshot == nil else { return false }
         adjust(by: 0.001); return true

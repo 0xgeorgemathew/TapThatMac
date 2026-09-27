@@ -15,6 +15,7 @@ struct CenterReadout: View {
     private var guidance: String {
         if state.committing != nil { return "Selected" }
         if state.automaticAction { return "Selecting…" }
+        if state.tapPending { return "Tap received\nTap again to choose" }
         return "Tap to move · Double to choose\nArrows · Return · Esc"
     }
 

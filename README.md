@@ -2,11 +2,11 @@
 
 <img src="docs/assets/tapthatx-app-icon.png" width="96" alt="TapThatX icon">
 
-A native macOS menu bar app that turns deliberate double taps and knocks into actions. Built with Swift, SwiftUI and AppKit; no third-party package dependencies.
+A native macOS app that turns deliberate double taps and knocks into actions. Its main window stays available from the Dock while recognition follows the selected operating mode. Built with Swift, SwiftUI and AppKit; no third-party package dependencies.
 
 The current on-Mac detection is the working POC baseline. Set one **Double-tap action** in Actions: Ring, Lock Mac, media controls, or an experimental ChatGPT control. Existing lock, quick-action and assistant preferences migrate automatically. Triple-tap recognition is disabled in production.
 
-Ring reveals every action. A single tap advances clockwise after the double-tap window; a double-tap chooses the highlighted action without advancing first. The default window is 450 ms and calibration can extend it to match a slower natural cadence. Right/Down and Left/Up cycle in opposite directions and wrap around. Return chooses, Escape cancels, and pointer selection works too. The ring starts with Play / Pause selected. Preview responds to the same gestures while actions remain paused. Direct Lock Mac and Play / Pause show the ring, swing the highlight to the command, and animate a press before executing (about 620 ms total). Choosing an action in the open ring shows a 220 ms press before execution. Escape or losing focus cancels the pending action. Trackpad haptic feedback acknowledges the request on supported hardware; a confirmation appears after unlocking when macOS confirmed the lock. macOS may cover the ring as soon as the screen locks.
+Ring reveals every action. A single tap advances clockwise after the double-tap window; a double-tap chooses the highlighted action without advancing first. The default window is 450 ms and calibration can extend it to match a slower natural cadence. Arrow keys cycle through actions and wrap around. Return chooses, Escape cancels, and pointer selection works too. A separate ring preview never executes actions. Direct Lock Mac and Play / Pause show the ring, swing the highlight to the command, and animate a press before executing (about 620 ms total). Choosing an action in the open ring shows a 220 ms press before execution. Escape or losing focus cancels the pending action. Trackpad haptic feedback acknowledges the request on supported hardware; a confirmation appears after unlocking when macOS confirmed the lock. macOS may cover the ring as soon as the screen locks.
 
 A quiet chime acknowledges each confirmed ring choice, including automatic Lock Mac and Play / Pause. Hovering and moving the highlight remain silent. Confirmation keeps the ring steady and emphasizes the center icon without restarting the highlight's motion; the chime acknowledges the choice, not successful execution.
 
@@ -43,36 +43,37 @@ See [Contributing](CONTRIBUTING.md) for the development loop and [distribution](
 
 ## Try the baseline
 
-The Permissions page opens on launch when access is missing and provides buttons for the relevant System Settings pages. Grant Accessibility and Input Monitoring when prompted on launch. Accessibility enables system actions; Input Monitoring enables suppression near typing. Direct sensor access is tried first; the signed helper may require approval in System Settings.
+The Live view gives permission guidance when access is missing. Accessibility enables system actions; Input Monitoring enables suppression near typing. Direct sensor access is tried first; the signed helper may require approval in System Settings. Sensor reconnection is available in Live.
 
-1. Open **Setup & Diagnostics** and keep **800 Hz** for the current detection baseline.
-2. Watch the graph while tapping twice. Actions are paused while settings are visible.
-3. In **Actions**, set **Double-tap → Ring**, enable actions and close settings. Double-tap to open, tap to move, and double-tap to choose.
-4. After a missed interaction, immediately choose **Save last 15 seconds** from the menu.
+1. Choose **Active**, **Test**, or **Paused** in the main window. Active runs configured actions; Test recognizes without executing; Paused stops recognition and sampling.
+2. Watch the Live graph while tapping twice. Opening, closing, minimizing, or focusing the window does not change the selected mode.
+3. In **Actions**, choose the double-tap behavior. To use the ring, double-tap to open, tap to move, and double-tap to choose.
 
-The recent export includes bounded XYZ samples, key timestamps and diagnostic events. It saves locally under `~/Library/Application Support/TapThatX/`; it contains no typed characters or microphone recording and is never uploaded. Unsaved context is lost on quit. Calibration recordings also disable actions while recording. Simulated input always uses dry-run actions.
+The app uses 800 Hz for normal operation. CLI and test overrides remain available for development, including the existing restriction that rates below 50 Hz cannot execute actions. Motion capture, replay, and diagnostic export primitives remain available to development tools; TapThatX does not expose a recordings screen.
 
-Lower sampling rates remain experimental; below 50 Hz is monitoring only. Reliable desk detection, left/right classification, broad hardware coverage and significant whole-app CPU savings at lower rates are not established. The graph displays motion, not proof that every peak qualifies as a gesture.
+Reliable desk detection, left/right classification, broad hardware coverage and significant whole-app CPU savings at lower rates are not established. The graph displays motion, not proof that every peak qualifies as a gesture.
 
 ## Personal calibration
 
-Use the first-run calibration or choose **Calibrate…** in Tap Tuning. Calibration takes over the settings window and asks for four gestures only: one light tap, two light taps, one natural tap, and two natural taps. There are no setup fields, background exercises, review forms, or manual confirmation screens. Valid gestures advance automatically and the resulting profile is applied automatically.
+Choose **Calibrate…** in Live and select an open Mac on a desk or a closed Mac using an active external display. Use separate profiles for these setups; select the matching profile when switching. Lap use is outside scope.
 
-Each gesture window includes a short pre-cue baseline and a 2.5-second response period. The app fits amplitude, onset-speed, pulse-duration, and double-tap-cadence settings that preserve the four requested gestures without accepting extra impacts around them. Collection still rejects missing or delayed samples, interrupted sessions, typing over the gesture, and incorrect contact counts. If no profile qualifies, existing settings stay unchanged and the focused flow offers a retry.
+Calibration takes about two minutes. It records everyday desk activity and leg/table movement, then light taps and knocks, both singly and in pairs. A fresh round verifies the fitted settings without changing them. Valid captures advance automatically; only a verified profile is applied automatically. Actions remain blocked during collection and review. Failed calibration leaves existing settings unchanged.
 
-Sessions are saved locally under `~/Library/Application Support/TapThatX/Calibration/` with unique filenames and per-gesture checkpoints. No old recordings are used, and nothing is uploaded. A short calibration personalizes detector settings; it does not establish general detection accuracy. See the [design and limits](docs/DETECTION-CALIBRATION.md).
+The live graph shows the broad motion envelope in cyan and the light-tap impulse in violet, with their separate gates. The ring acknowledges a pending tap while waiting to distinguish a single from a double. The detector accepts configured floors down to 0.002 g, preserves fast 120–130 ms pairs in generated tests, and waits for pending pulse confirmation before expiring a pair.
+
+Sessions are saved locally under `~/Library/Application Support/TapThatX/Calibration/` with unique filenames and per-window checkpoints. Nothing is uploaded. Generated regression tests and short calibration do not establish real-world desk reliability. See the [design and limits](docs/DETECTION-CALIBRATION.md) and [CNN reassessment](docs/CNN-REASSESSMENT.md).
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
 | `Sources/TapCore` | Sensor decoding, buffered input, pulse detection, gesture routing, replay and shared models |
-| `Sources/TapThatX` | Menu bar app, settings, graph, command ring and action execution |
+| `Sources/TapThatX` | macOS app, Live and Actions views, graph, command ring and action execution |
 | `Sources/TapSensorHelper` | Authenticated sensor helper |
 | `Sources/SensorProbe` | Read-only hardware diagnostic executable |
 | `Sources/ReplayCaptures` | Labeled recording replay CLI |
 | `Tests/TapCoreTests` | Deterministic generated-signal, collection, calibration and interaction tests |
-| `Packaging` | Bundle metadata, app/menu icons and DMG artwork |
+| `Packaging` | Bundle metadata, app icon and DMG artwork |
 | `scripts` | Validation, app bundling and distribution |
 
 [First-principles detection and calibration](docs/DETECTION-CALIBRATION.md) describes the design, implemented quality checks, and remaining algorithm experiments. Historical captured fixtures and their accuracy claims have been removed.

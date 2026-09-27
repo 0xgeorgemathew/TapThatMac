@@ -11,6 +11,19 @@ final class MotionTraceTests: XCTestCase {
         XCTAssertEqual(trace.points[0].peak, 0.12)
     }
 
+    func testImpulsePeakAndGateSurviveDisplayDownsampling() {
+        var trace = MotionTrace()
+        trace.append(time: 1, amplitude: 0.01, threshold: 0.02,
+                     impulseAmplitude: 0.006, impulseThreshold: 0.005)
+        trace.append(time: 1.001, amplitude: 0.008, threshold: 0.02,
+                     impulseAmplitude: 0.001, impulseThreshold: 0.004)
+        XCTAssertEqual(trace.points.count, 1)
+        XCTAssertEqual(trace.points[0].impulsePeak, 0.006)
+        XCTAssertEqual(trace.points[0].impulseThreshold, 0.004)
+        trace.append(time: 1.03, amplitude: 0.003, threshold: 0.02)
+        XCTAssertNil(trace.points.last?.impulsePeak)
+    }
+
     func testHistoryIsBoundedAndChronological() {
         var trace = MotionTrace()
         for index in 0..<2000 {
@@ -50,7 +63,11 @@ final class MotionTraceTests: XCTestCase {
             var settings = DetectorSettings(); settings.sensitivity = sensitivity
             XCTAssertEqual(DetectorSettings.sensitivity(forAmplitudeFloor: settings.amplitudeFloor), sensitivity, accuracy: 0.000001)
         }
-        XCTAssertEqual(DetectorSettings.sensitivity(forAmplitudeFloor: 0), 7)
+        XCTAssertEqual(DetectorSettings.sensitivity(forAmplitudeFloor: 0), 17.5)
+        XCTAssertEqual(DetectorSettings.sensitivity(forAmplitudeFloor: 0.002), 17.5, accuracy: 0.000001)
+        var settings = DetectorSettings()
+        settings.sensitivity = DetectorSettings.sensitivity(forAmplitudeFloor: 0.002)
+        XCTAssertEqual(settings.amplitudeFloor, 0.002, accuracy: 0.000001)
         XCTAssertEqual(DetectorSettings.sensitivity(forAmplitudeFloor: 1), 0.5)
         XCTAssertEqual(DetectorSettings.sensitivity(forAmplitudeFloor: .nan), 2)
     }

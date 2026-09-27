@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import TapCore
 
 struct TuningPane: View {
@@ -16,10 +17,12 @@ struct TuningPane: View {
     var body: some View {
         PaneScaffold {
             VStack(alignment: .leading, spacing: 24) {
-                PaneHeader(title: "Find your tap",
-                           detail: "Tap twice while watching the signal. Actions stay paused while settings are open.")
+                PaneHeader(title: "Live",
+                           detail: "Watch the motion trace and adjust tap sensitivity.")
 
                 VStack(spacing: 20) {
+                    if !model.accessibilityPermission || !model.typingPermission { permissionCard }
+                    if model.status != "Streaming accelerometer" && !model.paused { connectionRecoveryCard }
                     signalCard
                     profileCard
                     behaviorCard
@@ -71,12 +74,14 @@ struct TuningPane: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 .frame(maxWidth: 280)
                 Picker("Time window", selection: $graphDuration) {
                     Text("2 s").tag(2.0)
                     Text("8 s").tag(8.0)
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 .frame(width: 100)
                 Spacer(minLength: 0)
                 Button(graphHeld ? "Resume live" : "Hold trace") {
@@ -111,10 +116,10 @@ struct TuningPane: View {
                 }
             }
 
-            Text("Low-range detail expands small signals on a nonlinear axis; values stay in g. Hold the trace and hover to inspect peaks. Drag the gold minimum to tune, or use arrow keys (Shift for fine steps).")
+            Text("Hold the trace and hover to inspect peaks. Drag the gold threshold, or focus the graph and use arrow keys (Shift for fine steps).")
                 .font(.caption).foregroundStyle(.secondary)
                 .multilineTextAlignment(.leading)
-            Text("Cyan shows motion-envelope peaks in 20 ms buckets. The dashed gold line is its adaptive detection gate, including noise rejection. Light-tap impulse detection is separate and is not plotted. A crossing alone does not confirm a tap.")
+            Text("Cyan shows motion; violet shows the light-tap impulse when enabled. Gold dashes mark the motion gate; violet dots mark the light-tap gate. A crossing alone does not confirm a tap.")
                 .font(.caption).foregroundStyle(.secondary)
                 .multilineTextAlignment(.leading)
         }
@@ -142,10 +147,10 @@ struct TuningPane: View {
                     .frame(width: 32, height: 32)
                     .background(Color.primary.opacity(0.05), in: Circle())
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(model.activeCalibrationProfile?.name ?? "No tap profile")
+                    Text(model.activeCalibrationProfile?.name ?? "No calibration profile")
                         .font(.headline)
                     Text(model.activeCalibrationProfile == nil
-                         ? "Teach TapThatX your light and natural taps."
+                         ? "Calibrate to match your taps."
                          : "Your personal tap settings are active.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
@@ -185,7 +190,7 @@ struct TuningPane: View {
                 }
             }
 
-            Text("Run calibration again whenever your taps or your setup change.")
+            Text("Recalibrate if your tap style or setup changes.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .reactorCard()
@@ -197,29 +202,8 @@ struct TuningPane: View {
                 .font(.headline)
 
             behaviorRow(
-                title: "Sampling rate",
-                detail: model.sampleRate < 50
-                    ? "This rate records slow motion only. Brief taps can disappear between samples, so actions are unavailable. Choose 50 Hz or higher to test triggers."
-                    : "Guided Calibration uses 800 Hz to sample brief contacts. Lower rates can miss taps between samples and remain experimental."
-            ) {
-                ReactorGlassMenuPicker(
-                    title: "Sampling rate",
-                    options: SamplingRate.options,
-                    label: { rate in
-                        "\(rate) Hz\(rate < 50 ? " (recording only)" : rate < 800 ? " (experimental)" : " (baseline)")"
-                    },
-                    selection: $model.sampleRate
-                )
-                .frame(maxWidth: .infinity)
-                .disabled(model.captureRemaining > 0 || model.input != .sensor)
-            }
-
-            Divider()
-                .overlay(Color.primary.opacity(0.08))
-
-            behaviorRow(
                 title: "Ignore impacts near typing",
-                detail: "Uses key timing only. Wait briefly after typing before tapping. A lower threshold is experimental and can also increase missed taps from ringing."
+                detail: "Uses key timing only. Wait briefly after typing before tapping."
             ) {
                 Toggle("Ignore impacts near typing", isOn: $model.suppressTyping)
                     .labelsHidden()
@@ -229,6 +213,52 @@ struct TuningPane: View {
             }
         }
         .reactorCard()
+    }
+
+    private var permissionCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Permissions", systemImage: "checkmark.shield").font(.headline)
+            if !model.accessibilityPermission {
+                HStack {
+                    Text("Accessibility is needed to run system actions.").font(.callout).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Open Accessibility") { openPrivacy("Privacy_Accessibility") }
+                        .buttonStyle(.reactorButtonCompact)
+                }
+            }
+            if !model.typingPermission {
+                HStack {
+                    Text("Input Monitoring helps suppress taps during typing.").font(.callout).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Open Input Monitoring") { openPrivacy("Privacy_ListenEvent") }
+                        .buttonStyle(.reactorButtonCompact)
+                }
+            }
+            Button("Check permissions again") { model.refreshPermissions() }
+                .buttonStyle(.plain).font(.caption)
+        }
+        .reactorCard()
+    }
+
+    private var connectionRecoveryCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Sensor connection", systemImage: "waveform.path")
+                .font(.headline)
+            Text(model.status).font(.callout).foregroundStyle(.secondary)
+            if model.input == .helper {
+                Text(model.helperStatus).font(.caption).foregroundStyle(.secondary)
+                Button("Open Login Items") { model.openHelperApprovalSettings() }
+                    .buttonStyle(.reactorButtonCompact)
+            }
+            Button("Reconnect sensor") { model.reconnectSensor() }
+                .buttonStyle(.reactorButtonCompact)
+        }
+        .reactorCard()
+    }
+
+    private func openPrivacy(_ pane: String) {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func behaviorRow<Control: View>(

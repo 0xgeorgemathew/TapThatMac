@@ -46,7 +46,7 @@ struct NavDock: View {
         .padding(.bottom, 16)
         // Seed focus on the selected row so arrow-key navigation works as
         // soon as the window opens, like the previous sidebar.
-        .onAppear { focusedSection = selection ?? .tuning }
+        .onAppear { focusedSection = selection ?? .live }
     }
 
     private func select(_ section: SettingsSection) {

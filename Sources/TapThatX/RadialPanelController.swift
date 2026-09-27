@@ -6,6 +6,7 @@ final class RingState: ObservableObject {
     @Published var selected: Command?
     @Published var committing: Command?
     @Published var automaticAction = false
+    @Published var tapPending = false
     @Published var selectionAngle = 0.0
     @Published var isPresented = true
     var presentedSelectionAngle: Double?
@@ -25,6 +26,7 @@ final class RingState: ObservableObject {
     }
 
     func resetSelection(_ command: Command) {
+        tapPending = false
         presentedSelectionAngle = nil
         selected = command
         selectionAngle = Double(Command.allCases.firstIndex(of: command) ?? 0) * 360 / Double(Command.allCases.count)

@@ -3,10 +3,10 @@ import TapCore
 
 struct SetupView: View {
     @ObservedObject var model: AppModel
-    @State private var selection: SettingsSection? = .tuning
-    @State private var label = "Desk double taps"
-    @State private var expectedDoubleKnocks = 1
+    @State private var selection: SettingsSection? = .live
+    @State private var calibrationPresented = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openWindow) private var openWindow
 
     /// Short bundle version for the dock footer caption.
     static var appVersion: String? {
@@ -20,18 +20,18 @@ struct SetupView: View {
             ReactorStage()
 
             Group {
-                if selection == .calibration {
+                if calibrationPresented {
                     CalibrationPane(
                         model: model,
                         calibration: model.calibration,
-                        onDismissOnboarding: { selection = .tuning }
+                        onDismissOnboarding: { calibrationPresented = false }
                     )
                     // Clear the floating traffic lights without touching the
                     // calibration layout itself; the stage still fills the window.
                     .safeAreaInset(edge: .top, spacing: 0) { TrafficLightSpacer() }
                 } else {
                     HStack(spacing: 8) {
-                        NavDock(selection: $selection, appVersion: Self.appVersion)
+                    NavDock(selection: $selection, appVersion: Self.appVersion)
                         VStack(spacing: 0) {
                             pane
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -44,7 +44,7 @@ struct SetupView: View {
                                 // Dock selection drives the pane swap: the
                                 // incoming pane springs up, the outgoing fades.
                                 .transition(paneTransition)
-                            settingsFooter
+                    settingsFooter
                         }
                         // The settings column participates in pane swaps while
                         // the dock remains fixed on the left.
@@ -66,12 +66,9 @@ struct SetupView: View {
         // panels and dock float on real vibrancy.
         .background(SettingsWindowReader(model: model)).tint(ReactorTheme.accent)
         .onAppear {
+            model.reopenMainWindow = { openWindow(id: "main") }
             model.refreshPermissions()
-            if !model.accessibilityPermission || !model.typingPermission {
-                selection = .permissions
-            } else if !model.hasSeenCalibrationOnboarding {
-                selection = .calibration
-            }
+            if selection == nil { selection = .live }
         }
     }
 
@@ -90,16 +87,9 @@ struct SetupView: View {
     }
 
     @ViewBuilder private var pane: some View {
-        switch selection ?? .tuning {
-        case .permissions: PermissionsPane(model: model)
-        case .tuning:      TuningPane(model: model, openCalibration: { selection = .calibration })
-        case .actions:     ActionsPane(model: model)
-        case .calibration: EmptyView()
-        case .recordings:  RecordingsPane(model: model,
-                                          label: $label,
-                                          expectedDoubleKnocks: $expectedDoubleKnocks)
-        case .input:       InputPane(model: model)
-        case .diagnostics: DiagnosticsPane(model: model, setSelection: { selection = $0 })
+        switch selection ?? .live {
+        case .live:    TuningPane(model: model, openCalibration: { calibrationPresented = true })
+        case .actions: ActionsPane(model: model)
         }
     }
 
@@ -119,7 +109,7 @@ struct SetupView: View {
         .padding(.bottom, -6)
     }
 
-    /// Floating glass shelf: live status, Pause, and the completion button.
+    /// The selected operating mode remains independent of window visibility.
     private var settingsFooter: some View {
         ReactorGlassContainer(spacing: 8) {
             HStack(spacing: 16) {
@@ -151,15 +141,14 @@ struct SetupView: View {
                     value: model.acknowledgment
                 )
                 Spacer(minLength: 8)
-                Toggle("Pause actions", isOn: $model.paused)
-                    .toggleStyle(.switch)
-                    // Native control, accent-tinted so the switch matches
-                    // the one accent when on.
-                    .tint(ReactorTheme.accent)
-                    .fixedSize()
-                Button("Enable & close") { model.enableAndCloseSettings() }
-                    .buttonStyle(.reactorButton(prominent: true)).fixedSize()
-                    .disabled(model.calibration.blocksActions || model.captureRemaining > 0 || model.paused || model.input == .simulated || (model.input == .sensor && model.sampleRate < 50))
+                Picker("Mode", selection: $model.operatingMode) {
+                    ForEach(ActionAvailability.Mode.allCases, id: \.self) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 260)
+                .accessibilityLabel("Operating mode")
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
@@ -184,17 +173,24 @@ private struct SettingsWindowReader: NSViewRepresentable {
     func updateNSView(_ view: WindowView, context: Context) {}
     final class WindowView: NSView {
         weak var model: AppModel?
+        private var closeObserver: NSObjectProtocol?
         init(model: AppModel) { self.model = model; super.init(frame: .zero) }
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             model?.setupWindow = window
+            if closeObserver == nil, let window {
+                closeObserver = NotificationCenter.default.addObserver(
+                    forName: NSWindow.willCloseNotification, object: window, queue: .main
+                ) { [weak model] _ in model?.handleWindowClose() }
+            }
             // Scene-level clear-window setup: applied as early as the shell
             // can reach the window, around/before the stage's vibrancy layer
             // installs itself. Idempotent — the vibrancy layer re-asserts
             // the same configuration and keeps it live.
             if let window { ReactorWindowConfig.apply(to: window) }
         }
+        deinit { if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) } }
     }
 }
 

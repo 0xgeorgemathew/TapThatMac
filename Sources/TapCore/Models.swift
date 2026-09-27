@@ -71,6 +71,11 @@ public enum ReportDecoder {
 }
 
 public struct DetectorSettings: Codable, Equatable {
+    public static let minimumAmplitudeFloor = 0.002
+    public static let maximumAmplitudeFloor = 0.07
+    public static let minimumSensitivity = 0.5
+    public static let maximumSensitivity = 17.5
+
     public var sensitivity: Double = 1
     public var suppressTyping = true
     /// Minimum onset speed for the broader knock envelope, in g/s.
@@ -99,9 +104,12 @@ public struct DetectorSettings: Codable, Equatable {
     }
     public static func sensitivity(forAmplitudeFloor value: Double) -> Double {
         guard value.isFinite else { return 2 }
-        return min(7, 0.035 / min(0.07, max(0.005, value)))
+        let floor = min(maximumAmplitudeFloor, max(minimumAmplitudeFloor, value))
+        return min(maximumSensitivity, 0.035 / floor)
     }
-    public var amplitudeFloor: Double { 0.035 / max(0.5, min(7, sensitivity)) }
+    public var amplitudeFloor: Double {
+        0.035 / max(Self.minimumSensitivity, min(Self.maximumSensitivity, sensitivity))
+    }
 }
 
 public enum DoubleTapAction: String, CaseIterable {

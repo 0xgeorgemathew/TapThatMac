@@ -4,7 +4,23 @@ import ServiceManagement
 import TapCore
 import Combine
 
-enum InputMode: String, CaseIterable { case sensor = "Direct sensor", helper = "Sensor helper", simulated = "Simulated input" }
+enum InputMode: String { case sensor = "Direct sensor", helper = "Sensor helper", simulated = "Simulated input" }
+
+enum SensorRecoveryPolicy {
+    static func shouldAttemptHelper(after status: String) -> Bool {
+        status.range(of: "access denied", options: .caseInsensitive) != nil
+            || status.range(of: "reports stopped", options: .caseInsensitive) != nil
+    }
+}
+
+enum OperatingModeMigration {
+    static func restore(savedMode: String?, wasPaused: Bool, actionsEnabled: Bool?) -> ActionAvailability.Mode {
+        if let savedMode, let mode = ActionAvailability.Mode(rawValue: savedMode) { return mode }
+        if wasPaused { return .paused }
+        if actionsEnabled == false { return .test }
+        return .active
+    }
+}
 
 final class AppModel: ObservableObject {
     @Published var doubleTapAction = DoubleTapAction.restored(
@@ -22,18 +38,21 @@ final class AppModel: ObservableObject {
         if doubleTapAction.command?.assistantIntent != nil { return .assistant }
         return doubleTapAction == .lock ? .doubleTapLock : .quickAction
     }
-    @Published var input: InputMode = .sensor { didSet { restart() } }
-    @Published var sampleRate: Int = {
+    private(set) var input: InputMode = .sensor { didSet { restart() } }
+    private(set) var sampleRate: Int = {
         let args = CommandLine.arguments
         guard let index = args.firstIndex(of: "--sample-rate"),
               args.indices.contains(index + 1), let requested = Int(args[index + 1]),
               SamplingRate.options.contains(requested) else {
-            let saved = UserDefaults.standard.integer(forKey: "sampleRate")
-            return SamplingRate.options.contains(saved) ? saved : 800
+            return 800
         }
         return requested
-    }() { didSet { UserDefaults.standard.set(sampleRate, forKey: "sampleRate"); restart(); logSettings() } }
-    @Published var paused = false { didSet { restart() } }
+    }()
+    @Published var operatingMode: ActionAvailability.Mode { didSet {
+        modeDefaults.set(operatingMode.rawValue, forKey: "operatingMode")
+        restart(); logSettings()
+    } }
+    var paused: Bool { operatingMode == .paused }
     @Published var sensitivity = 2.0 {
         didSet {
             UserDefaults.standard.set(sensitivity, forKey: "knockSensitivity")
@@ -51,29 +70,21 @@ final class AppModel: ObservableObject {
         detector.settings.suppressTyping = suppressTyping
         persistDetectorSettings(); resetInteraction(); logSettings()
     } }
-    @Published var actionsEnabled = !CommandLine.arguments.contains("--calibrate") { didSet { resetInteraction(resetDetector: false); logSettings() } }
+    private let legacyCalibrationMode = CommandLine.arguments.contains("--calibrate")
     @Published var status = "Starting"
     @Published var helperStatus = HelperClient.status
     @Published var acknowledgment = "Choose your double-tap action in Actions"
     private(set) var sampleCount = 0
     private(set) var rate = 0.0
     private(set) var rejected = 0
-    private(set) var feature = 0.0
-    private(set) var threshold = 0.0
     private(set) var knocks = 0
     private(set) var recognizedPairs = 0
     private var lastLoggedRejection = -Double.infinity
     private(set) var lastDoubleTime: Double?
-    private(set) var captureRemaining = 0
-    private(set) var captures: [Capture] = []
-    private(set) var recentEvents: [DiagnosticEvent] = []
     @Published var typingPermission = false
     @Published var accessibilityPermission = false
-    private(set) var warmingUp = true
-    @Published var calibrationMode = CommandLine.arguments.contains("--calibrate")
     @Published private(set) var calibrationProfiles: [CalibrationProfile] = []
     @Published private(set) var activeCalibrationProfile: CalibrationProfile?
-    @Published private(set) var hasSeenCalibrationOnboarding = UserDefaults.standard.bool(forKey: "hasSeenCalibrationOnboarding")
     let diagnostics = DiagnosticsStore()
     let calibration: CalibrationController
     private var calibrationObservation: AnyCancellable?
@@ -99,6 +110,7 @@ final class AppModel: ObservableObject {
     private var simulationStarted = 0.0
     private var lastSampleAt = 0.0
     weak var setupWindow: NSWindow?
+    var reopenMainWindow: (() -> Void)?
     var refreshGraph: (() -> Void)?
     var graphIsAttached = false
     private(set) var motionTrace = MotionTrace()
@@ -112,14 +124,13 @@ final class AppModel: ObservableObject {
     let tapDetected = PassthroughSubject<Void, Never>()
     private var lastLiveAmplitudeAt = 0.0
     private var liveLevel = 0.0
-    private var wasTuning = false
     private var collectGraph = false
     private var lastRuntimeWrite = 0.0
-    var isTuning: Bool { setupWindow?.isVisible == true }
-    var setupIsVisible: Bool { isTuning && setupWindow?.occlusionState.contains(.visible) == true }
+    private(set) var isShutdown = false
+    var setupIsVisible: Bool { setupWindow?.isVisible == true && setupWindow?.occlusionState.contains(.visible) == true }
     var amplitudeFloor: Double { detector.settings.amplitudeFloor }
-    var liveThreshold: Double { detector.threshold }
     var liveWarmingUp: Bool { detector.warmingUp }
+    private(set) var ringPreviewActive = false
     func setAmplitudeFloor(_ value: Double) {
         sensitivity = DetectorSettings.sensitivity(forAmplitudeFloor: value)
     }
@@ -132,31 +143,28 @@ final class AppModel: ObservableObject {
     private var awaitingLock = false
     private var showLockReceiptOnReturn = false
     private var lockAttempt = 0
+    private let modeDefaults: UserDefaults
+    private let servicesEnabled: Bool
     private var now: Double { ProcessInfo.processInfo.systemUptime }
     var actionBlockReason: String? {
-        ActionAvailability.blockReason(calibration: calibrationMode, settingsOpen: isTuning,
-            simulated: input == .simulated, paused: paused, inactive: !inactiveReasons.isEmpty,
-            recording: diagnostics.current != nil || calibration.blocksActions, enabled: actionsEnabled,
-            monitoringOnly: input == .sensor && sampleRate < 50)
+        if legacyCalibrationMode { return "Legacy calibration mode: system actions are off" }
+        let reason = ActionAvailability.blockReason(mode: operatingMode,
+            calibration: calibration.blocksActions, simulated: input == .simulated,
+            inactive: !inactiveReasons.isEmpty, monitoringOnly: input == .sensor && sampleRate < 50)
+        if reason != nil { return reason }
+        return accessibilityPermission ? nil : "Allow Accessibility to run system actions"
     }
     var canEnableActions: Bool { actionBlockReason == nil }
-    var actionStatus: String { actionBlockReason ?? "Ready when settings close" }
-    func enableAndCloseSettings() {
-        guard diagnostics.current == nil, !calibration.blocksActions else { return }
-        calibrationMode = false; actionsEnabled = true
-        setupWindow?.close()
-        resetInteraction(resetDetector: false)
-    }
+    var actionStatus: String { actionBlockReason ?? "Ready · \(doubleTapAction.rawValue)" }
 
     var calibrationUnavailableReason: String? {
-        if input == .simulated { return "Choose a real sensor in Input Source." }
+        if input == .simulated { return "Calibration requires the connected sensor." }
         if paused || !inactiveReasons.isEmpty { return "Resume the sensor in an active session." }
-        if !setupIsVisible { return "Keep the calibration window visible." }
+        if !setupIsVisible { return "Keep TapThatX visible during calibration." }
         if status != "Streaming accelerometer" { return "Connect the sensor before recording." }
-        if input == .sensor && sampleRate != 800 { return "Choose 800 Hz in Tap Tuning before calibration." }
+        if sampleRate != 800 { return "Calibration requires the normal 800 Hz sensor rate." }
         if rate < 700 || rate > 900 { return "Waiting for a steady sensor stream near 800 Hz." }
         if !typingPermission { return "Enable Input Monitoring so overlapping typing can be identified." }
-        if diagnostics.current != nil { return "Finish the diagnostic recording first." }
         if calibration.blocksActions, let context = calibration.session?.context,
            context.input != input.rawValue || context.requestedRate != (input == .helper ? 800 : sampleRate)
             || context.initialSettings.sensitivity != sensitivity {
@@ -166,14 +174,13 @@ final class AppModel: ObservableObject {
     }
     var canStartCalibration: Bool { calibrationUnavailableReason == nil }
 
-    func beginCalibration() {
+    func beginCalibration(setup: DeskSetup = .openMac) {
         guard canStartCalibration else { return }
         resetInteraction()
-        markCalibrationOnboardingSeen()
-        calibration.begin(context: CalibrationContext(surface: "Automatic", placement: diagnostics.model,
+        calibration.begin(context: CalibrationContext(surface: setup.rawValue, placement: diagnostics.model,
             device: diagnostics.model, os: ProcessInfo.processInfo.operatingSystemVersionString,
             input: input.rawValue, requestedRate: input == .helper ? 800 : sampleRate,
-            initialSettings: detector.settings))
+            initialSettings: detector.settings, includesSurfaceBumps: true))
     }
     func recordCalibrationTrial() {
         guard canStartCalibration else { return }
@@ -182,6 +189,10 @@ final class AppModel: ObservableObject {
     }
     func cancelCalibration() {
         if calibration.cancel(at: now) { resetInteraction() }
+    }
+
+    func handleWindowClose() {
+        if calibration.blocksActions { cancelCalibration() }
     }
     func applyCalibration() {
         guard calibration.stage == .complete, calibration.session?.verificationPassed == true,
@@ -202,7 +213,6 @@ final class AppModel: ObservableObject {
         UserDefaults.standard.set(profile.id.uuidString, forKey: "activeCalibrationProfileID")
         UserDefaults.standard.set(profile.id.uuidString, forKey: "calibrationSessionID")
         calibration.markApplied()
-        markCalibrationOnboardingSeen()
         acknowledgment = "Your personal tap profile is active."
         diagnostics.log("calibration", "Applied session \(session.id); floor=\(settings.amplitudeFloor); rise=\(settings.minimumRiseRate)/\(settings.impulseMinimumRiseRate); duration=\(settings.maximumPulseDuration); pair=\(settings.maximumTapInterval)")
     }
@@ -229,20 +239,24 @@ final class AppModel: ObservableObject {
         acknowledgment = "Current detector settings kept without a tap profile"
     }
 
-    func markCalibrationOnboardingSeen() {
-        guard !hasSeenCalibrationOnboarding else { return }
-        hasSeenCalibrationOnboarding = true
-        UserDefaults.standard.set(true, forKey: "hasSeenCalibrationOnboarding")
-    }
-
-    init(startServices: Bool = true, calibration: CalibrationController = CalibrationController()) {
+    init(startServices: Bool = true, calibration: CalibrationController = CalibrationController(),
+         modeDefaults: UserDefaults = .standard) {
+        self.modeDefaults = modeDefaults
+        servicesEnabled = startServices
+        operatingMode = OperatingModeMigration.restore(
+            savedMode: modeDefaults.string(forKey: "operatingMode"),
+            wasPaused: modeDefaults.bool(forKey: "paused"),
+            actionsEnabled: modeDefaults.object(forKey: "actionsEnabled") as? Bool
+        )
         self.calibration = calibration
         calibrationObservation = calibration.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         let storedSettings = Self.loadDetectorSettings()
         var savedSettings = storedSettings ?? DetectorSettings()
         if storedSettings == nil {
             let savedSensitivity = UserDefaults.standard.object(forKey: "knockSensitivity") as? Double ?? 2.0
-            savedSettings.sensitivity = savedSensitivity.isFinite ? min(7, max(0.5, savedSensitivity)) : 2.0
+            savedSettings.sensitivity = savedSensitivity.isFinite
+                ? min(DetectorSettings.maximumSensitivity,
+                      max(DetectorSettings.minimumSensitivity, savedSensitivity)) : 2.0
         }
         sensitivity = savedSettings.sensitivity
         suppressTyping = savedSettings.suppressTyping
@@ -253,16 +267,17 @@ final class AppModel: ObservableObject {
            let id = UUID(uuidString: rawID) {
             activeCalibrationProfile = calibrationProfiles.first { $0.id == id }
         }
+        ring.onChoose = { [weak self] in self?.execute($0) }
+        ring.onDismiss = { [weak self] in
+            self?.ringPreviewActive = false
+            self?.router.reset()
+            self?.diagnostics.log("ring", "Dismissed; ready for a new pair")
+        }
         guard startServices else { return }
         sensor.onSamples = { [weak self] in self?.ingest($0) }
         sensor.onStatus = { [weak self] in self?.sensorStatus($0) }
         helper.onSamples = { [weak self] in self?.ingest($0) }
         helper.onStatus = { [weak self] in self?.sensorStatus($0) }
-        ring.onChoose = { [weak self] in self?.execute($0) }
-        ring.onDismiss = { [weak self] in
-            self?.router.reset()
-            self?.diagnostics.log("ring", "Dismissed; ready for a new pair")
-        }
         observeLifecycle()
         applicationObservers.append(NotificationCenter.default.addObserver(forName: NSApplication.didFinishLaunchingNotification, object: nil, queue: .main) { [weak self] _ in
             self?.requestLaunchPermissions()
@@ -291,7 +306,7 @@ final class AppModel: ObservableObject {
         RunLoop.main.add(tickTimer, forMode: .common)
     }
     private func logSettings() {
-        diagnostics.log("settings", "preset=\(preset.rawValue); action=\(doubleTapAction.rawValue); input=\(input.rawValue); sampleRate=\(sampleRate); sensitivity=\(sensitivity); typing=\(suppressTyping); enabled=\(actionsEnabled)")
+        diagnostics.log("settings", "preset=\(preset.rawValue); action=\(doubleTapAction.rawValue); input=\(input.rawValue); sampleRate=\(sampleRate); sensitivity=\(sensitivity); typing=\(suppressTyping); mode=\(operatingMode.rawValue)")
     }
     private func persistDetectorSettings() {
         guard let data = try? JSONEncoder().encode(detector.settings) else { return }
@@ -343,7 +358,7 @@ final class AppModel: ObservableObject {
     }
     private func prepareSensorAccess() {
         guard launchPermissionsRequested, !helperSetupRequested, input == .sensor, !paused else { return }
-        guard status.contains("access denied") || status.contains("reports stopped") else { return }
+        guard SensorRecoveryPolicy.shouldAttemptHelper(after: status) else { return }
         helperSetupRequested = true
         if HelperClient.service.status == .enabled { input = .helper; return }
         installHelper()
@@ -358,7 +373,17 @@ final class AppModel: ObservableObject {
             SMAppService.openSystemSettingsLoginItems()
         }
     }
-    func requestTypingPermission() { _ = CGRequestListenEventAccess(); refreshPermissions() }
+
+    func reconnectSensor() {
+        helperSetupRequested = false
+        waitingForHelperApproval = false
+        restart()
+        prepareSensorAccess()
+    }
+
+    func openHelperApprovalSettings() {
+        SMAppService.openSystemSettingsLoginItems()
+    }
     private func observeLifecycle() {
         let center = NSWorkspace.shared.notificationCenter
         for (off, on, reason) in [(NSWorkspace.willSleepNotification, NSWorkspace.didWakeNotification, "sleep"),
@@ -410,10 +435,11 @@ final class AppModel: ObservableObject {
         // Changing an action or closing settings must not add another 1.5 s warmup.
         if resetDetector {
             diagnostics.recent = RecentMotionBuffer()
-            detector.reset(); lastKeyTime = nil; lastSensorTime = nil; warmingUp = true
+            detector.reset(); lastKeyTime = nil; lastSensorTime = nil
         }
     }
     func restart() {
+        guard servicesEnabled else { return }
         configureTimer()
         resetInteraction(); diagnostics.finishCapture(); sensor.stop(); helper.stop(); sampleCount = 0; rate = 0
         if paused || !inactiveReasons.isEmpty { status = paused ? "Paused" : "Inactive session"; return }
@@ -459,7 +485,8 @@ final class AppModel: ObservableObject {
                 diagnostics.log("pulse", "\(detector.lastRejectionReason); t=\(String(format: "%.3f", lastLoggedRejection))")
             }
             if collectGraph {
-                motionTrace.append(time: sample.time, amplitude: detector.feature, threshold: detector.threshold)
+                motionTrace.append(time: sample.time, amplitude: detector.feature, threshold: detector.threshold,
+                                   impulseAmplitude: detector.impulseFeature, impulseThreshold: detector.impulseThreshold)
             }
         }
     }
@@ -488,8 +515,7 @@ final class AppModel: ObservableObject {
             lastDoubleTime = time
             diagnostics.log("gesture", "Double knock; \(preset.rawValue)")
             if ring.isOpen {
-                // Preview uses the same gestures. execute(_:) retains all action
-                // availability checks, so settings and simulation remain dry runs.
+                // Preview selection remains display-only regardless of the mode.
                 if let selected = ring.state.selected { ring.confirm(selected) }
             } else {
                 if let reason = actionBlockReason { acknowledgment = reason; toast.show(reason); return }
@@ -503,6 +529,12 @@ final class AppModel: ObservableObject {
         }
     }
     private func execute(_ command: Command) {
+        let allowed = ActionAvailability.canExecute(preview: ringPreviewActive, blockReason: actionBlockReason)
+        if ringPreviewActive {
+            acknowledgment = "Preview only · \(command.rawValue) was not run"
+            toast.show(acknowledgment)
+            return
+        }
         if let intent = command.assistantIntent {
             if let reason = actionBlockReason { acknowledgment = reason; toast.show(reason); return }
             let token = generation
@@ -517,7 +549,6 @@ final class AppModel: ObservableObject {
             return
         }
 
-        let allowed = actionsEnabled && canEnableActions && diagnostics.current == nil
         if allowed && !ActionExecutor.trusted { ActionExecutor.requestPermission() }
         acknowledgment = actionBlockReason ?? ActionExecutor().execute(command, enabled: allowed)
         if command == .lock && allowed && ActionExecutor.trusted {
@@ -535,7 +566,14 @@ final class AppModel: ObservableObject {
         toast.show(acknowledgment)
     }
     func inspectAssistantControls() { acknowledgment = AssistantActionExecutor().inspect() }
-    func previewRing() { guard !calibration.blocksActions else { return }; resetInteraction(resetDetector: false); ring.open(); router.consumeOpening(at: now) }
+    func previewRing() {
+        guard !ring.isOpen else { return }
+        resetInteraction(resetDetector: false)
+        ringPreviewActive = true
+        ring.open()
+        guard ring.isOpen else { ringPreviewActive = false; return }
+        router.consumeOpening(at: now)
+    }
     func simulateKnock() {
         guard input == .simulated, !paused else { return }
         simulatedUntil = now + 0.018
@@ -552,18 +590,12 @@ final class AppModel: ObservableObject {
         let currentInput = input
         if currentInput == .sensor { sensor.poll() }
         collectGraph = setupIsVisible && graphIsAttached
-        if isTuning != wasTuning {
-            wasTuning = isTuning
-            configureTimer()
-            resetInteraction(resetDetector: false)
-            motionTrace = MotionTrace()
-        }
         if time - lastPermissionRefresh >= (setupIsVisible ? 5 : 30) {
             lastPermissionRefresh = time
             refreshPermissions()
         }
         // Continuous disk telemetry is opt-in; ordinary use has no status writes.
-        if (calibrationMode || CommandLine.arguments.contains("--runtime-diagnostics")), time - lastRuntimeWrite >= 5 {
+        if (legacyCalibrationMode || CommandLine.arguments.contains("--runtime-diagnostics")), time - lastRuntimeWrite >= 5 {
             lastRuntimeWrite = time
             writeRuntimeStatus()
         }
@@ -590,7 +622,11 @@ final class AppModel: ObservableObject {
         }
         // Expire using processed sensor time. Wall time can run ahead of a second
         // tap that is still awaiting pulse confirmation in the sensor batch.
-        if let event = router.advance(wallTime: time, processedSensorTime: lastSensorTime ?? time) { route(event, at: time) }
+        let pendingOnset = (pendingImpacts + [detector.pendingOnset].compactMap { $0 }).min()
+        if let event = router.advance(wallTime: time, processedSensorTime: lastSensorTime ?? time,
+                                      pendingOnset: pendingOnset) { route(event, at: time) }
+        let tapPending = ring.isOpen && router.hasPendingTap
+        if ring.state.tapPending != tapPending { ring.state.tapPending = tapPending }
         diagnostics.tick()
         // The graph draws independently at 20 Hz. The large settings form only
         // refreshes counters once a second, and never while hidden or occluded.
@@ -609,9 +645,6 @@ final class AppModel: ObservableObject {
             if time - lastPresentationTime >= 1 {
                 lastPresentationTime = time
                 objectWillChange.send()
-                captureRemaining = diagnostics.captureRemaining; captures = diagnostics.captures
-                recentEvents = Array(diagnostics.events.suffix(8).reversed())
-                feature = detector.feature; threshold = detector.threshold; warmingUp = detector.warmingUp
             }
         }
         if status == "Streaming accelerometer", time - lastSampleAt > max(0.5, 3.0 / Double(sampleRate)) {
@@ -624,8 +657,9 @@ final class AppModel: ObservableObject {
             "status": status, "input": input.rawValue, "samples": sampleCount,
             "warmingUp": detector.warmingUp, "knocks": knocks, "feature": detector.feature,
             "threshold": detector.threshold, "sensitivity": sensitivity, "inactiveReasons": inactiveReasons.sorted(),
-            "requestedSampleRate": sampleRate, "measuredSampleRate": rate, "tuning": isTuning, "setupVisible": setupIsVisible,
-            "accessibility": accessibilityPermission, "helper": helperStatus, "actionsEnabled": actionsEnabled,
+            "requestedSampleRate": sampleRate, "effectiveSampleRate": input == .helper ? helper.rate : sensor.rate,
+            "measuredSampleRate": rate, "setupVisible": setupIsVisible,
+            "accessibility": accessibilityPermission, "helper": helperStatus, "operatingMode": operatingMode.rawValue,
             "events": diagnostics.events.suffix(12).map { "\($0.kind): \($0.detail)" }
         ]
         do {
@@ -636,39 +670,6 @@ final class AppModel: ObservableObject {
         } catch { /* Diagnostics must not interrupt recognition. */ }
     }
 
-    func startCapture(label: String, purpose: String, expectedDoubleKnocks: Int) {
-        guard !calibration.blocksActions else { return }
-        resetInteraction()
-        diagnostics.startCapture(label: label, purpose: purpose, simulated: input == .simulated, expectedDoubleKnocks: expectedDoubleKnocks)
-    }
-    func saveRecentActivity() {
-        do {
-            let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("TapThatX")
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let name = "recent-activity-\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(6)).json"
-            try diagnostics.exportRecent(preset: preset, settings: detector.settings, simulated: input == .simulated, to: directory.appendingPathComponent(name))
-            acknowledgment = "Saved last 15 seconds locally: \(name)"
-        } catch { acknowledgment = "Recent activity save failed: \(error.localizedDescription)" }
-        toast.show(acknowledgment)
-    }
-    func saveDiagnosticRecordings() {
-        do {
-            let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("TapThatX")
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let url = directory.appendingPathComponent("diagnostic-recordings-\(UUID().uuidString).json")
-            try diagnostics.export(preset: preset, settings: detector.settings, to: url)
-            acknowledgment = "Saved \(url.lastPathComponent) in Library/Application Support/TapThatX"
-        } catch { acknowledgment = "Diagnostic save failed: \(error.localizedDescription)" }
-    }
-
-    func mark(_ message: String) { diagnostics.log("feedback", message); acknowledgment = "Feedback marker saved" }
-    func export() {
-        let panel = NSSavePanel(); panel.nameFieldStringValue = "TapThatX-diagnostics.json"
-        if panel.runModal() == .OK, let url = panel.url {
-            do { try diagnostics.export(preset: preset, settings: detector.settings, to: url); acknowledgment = "Diagnostics exported" }
-            catch { acknowledgment = "Export failed: \(error.localizedDescription)" }
-        }
-    }
     func installHelper() {
         guard let team = Bundle.main.object(forInfoDictionaryKey: "TapThatXTeamIdentifier") as? String,
               SensorIPC.requirement(identifier: SensorIPC.appIdentifier, team: team) != nil else {
@@ -678,14 +679,13 @@ final class AppModel: ObservableObject {
         do { try HelperClient.service.register(); helperStatus = HelperClient.status }
         catch { helperStatus = "Registration failed: \(error.localizedDescription)" }
     }
-    func removeHelper() {
-        waitingForHelperApproval = false; helperSetupRequested = true
-        helper.stop(); resetInteraction()
-        HelperClient.service.unregister { [weak self] error in
-            DispatchQueue.main.async { self?.helperStatus = error.map { "Removal failed: \($0.localizedDescription)" } ?? HelperClient.status }
-        }
-    }
     func shutdown() {
+        guard !isShutdown else { return }
+        isShutdown = true
+        generation += 1
+        awaitingLock = false
+        lockAttempt += 1
+        pendingImpacts.removeAll()
         if calibration.blocksActions { _ = calibration.cancel(at: now) }
         timer?.invalidate(); timer = nil; toast.dismiss(); ring.dismiss(); sensor.stop(); helper.stop(); diagnostics.finishCapture()
         typingMonitor.stop()

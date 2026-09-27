@@ -13,11 +13,12 @@ open "/Applications/TapThatX.app"
 This removes only this app's download quarantine. It does not notarize the app,
 disable Gatekeeper globally, or grant Accessibility or Input Monitoring.
 
-3. TapThatX requests Accessibility and Input Monitoring at launch. Its Permissions
-   page explains each permission and opens the relevant settings. Enable TapThatX
-   manually in both lists. Quit and reopen if macOS asks you to.
-4. Return to TapThatX, select your action and choose Enable & close. Actions pause
-   while settings are open. Keep 800 Hz for the current on-Mac baseline.
+3. TapThatX requests Accessibility and Input Monitoring at launch. The Live view
+   explains missing access and opens the relevant System Settings pages. Enable
+   TapThatX manually in each list. Quit and reopen if macOS asks you to.
+4. Choose an operating mode: Active executes the configured action, Test shows
+   recognized gestures without executing actions, and Paused stops recognition.
+   TapThatX uses 800 Hz for normal operation.
 
 Ad-hoc builds require direct sensor access. The authenticated helper needs an
 Apple-signed build. Same-model Macs can still differ in OS and access settings.

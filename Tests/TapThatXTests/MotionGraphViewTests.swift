@@ -50,7 +50,8 @@ final class MotionGraphViewTests: XCTestCase {
             let time = Double(index) * 0.021
             let baseline = 0.001 + abs(sin(Double(index) * 1.7)) * 0.0015
             let peak = [90, 105, 220, 235].contains(index) ? 0.009 : baseline
-            trace.append(time: time, amplitude: peak, threshold: 0.0065)
+            trace.append(time: time, amplitude: peak, threshold: 0.0065,
+                         impulseAmplitude: peak * 0.65, impulseThreshold: 0.00375)
         }
         let snapshot = MotionGraphSnapshot(time: 8, points: trace.points, minimum: 0.006)
         let url = URL(fileURLWithPath: directory)

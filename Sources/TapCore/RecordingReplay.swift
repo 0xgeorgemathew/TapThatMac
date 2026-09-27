@@ -56,7 +56,7 @@ public enum RecordingReplay {
             default: break
             }
         }
-        func tick(at time: Double) {
+        func tick(at time: Double, flushing: Bool = false) {
             let ready = pending.filter { time - $0 >= 0.04 }
             pending.removeAll { time - $0 >= 0.04 }
             for impact in ready {
@@ -66,7 +66,10 @@ public enum RecordingReplay {
                     record(event, at: impact)
                 }
             }
-            if let event = router.advance(to: time - 0.04) { record(event, at: time) }
+            let pendingOnset = (pending + (flushing ? [] : [detector.pendingOnset].compactMap { $0 })).min()
+            if let event = router.advance(wallTime: time,
+                processedSensorTime: flushing ? time : lastSample ?? time,
+                pendingOnset: pendingOnset) { record(event, at: time) }
         }
         for sample in samples {
             while nextTick < sample.time {
@@ -81,7 +84,7 @@ public enum RecordingReplay {
         }
         let end = samples.last!.time + 0.6
         while nextTick <= end {
-            applyKeys(through: nextTick); tick(at: nextTick); nextTick += 0.05
+            applyKeys(through: nextTick); tick(at: nextTick, flushing: true); nextTick += 0.05
         }
         return ReplayResult(knockTimes: knocks, doubleKnockTimes: doubles, tripleKnockTimes: triples)
     }

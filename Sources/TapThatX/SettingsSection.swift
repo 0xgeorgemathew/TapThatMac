@@ -2,19 +2,14 @@ import SwiftUI
 
 /// Sidebar sections of the settings window, in display order.
 enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
-    case permissions, tuning, calibration, actions, recordings, input, diagnostics
+    case live, actions
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .permissions: "Permissions"
-        case .tuning: "Tap Tuning"
-        case .calibration: "Calibration"
+        case .live: "Live"
         case .actions: "Actions"
-        case .recordings: "Recordings"
-        case .input: "Input Source"
-        case .diagnostics: "Diagnostics"
         }
     }
 
@@ -22,13 +17,8 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         // Monochrome symbols throughout: multicolor-capable glyphs can render
         // untinted in sidebars, which broke accent consistency.
-        case .permissions: "checkmark.shield"
-        case .tuning: "waveform"
-        case .calibration: "target"
+        case .live: "waveform"
         case .actions: "bolt.fill"
-        case .recordings: "record.circle"
-        case .input: "cable.connector"
-        case .diagnostics: "ladybug"
         }
     }
 }
