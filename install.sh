@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tap That Mac installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/0xgeorgemathew/tapthatmac/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/0xgeorgemathew/TapThatMac/main/install.sh | bash
 #
 # Checks that this Mac has the motion sensor, downloads the newest release (betas included),
 # verifies its checksum, removes the download quarantine (the app is signed but not notarized),
@@ -16,7 +16,7 @@
 # Written for the bash 3.2 that ships with macOS.
 set -euo pipefail
 
-REPO="0xgeorgemathew/tapthatmac"
+REPO="0xgeorgemathew/TapThatMac"
 APP_NAME="Tap That Mac.app"
 PROCESS="TapThatMac"
 BUNDLE_ID="com.tapthatmac.app"

@@ -306,7 +306,7 @@ def terminal(work):
 <div class=stage>
   <div class=term>
     <div class=bar><i></i><i></i><i></i><span>Terminal — zsh</span></div>
-    <pre><span class=dim>$</span> curl -fsSL https://raw.githubusercontent.com/0xgeorgemathew/tapthatmac/main/install.sh | bash
+    <pre><span class=dim>$</span> curl -fsSL https://raw.githubusercontent.com/0xgeorgemathew/TapThatMac/main/install.sh | bash
 
 <span class=c>        ▅       ▅</span>
 <span class=c>        █       █</span>

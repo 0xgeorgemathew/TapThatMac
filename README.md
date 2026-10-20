@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/0xgeorgemathew/tapthatmac/releases"><img alt="Latest beta" src="https://img.shields.io/github/v/release/0xgeorgemathew/tapthatmac?include_prereleases&label=latest%20beta&color=7FD3F7&labelColor=08131D"></a>
+  <a href="https://github.com/0xgeorgemathew/TapThatMac/releases"><img alt="Latest beta" src="https://img.shields.io/github/v/release/0xgeorgemathew/TapThatMac?include_prereleases&label=latest%20beta&color=7FD3F7&labelColor=08131D"></a>
   <img alt="For macOS 14 and later" src="https://img.shields.io/badge/macOS-14%2B-EAF2F8?labelColor=08131D">
   <img alt="Apple silicon MacBook" src="https://img.shields.io/badge/Apple%20silicon-MacBook-B9A6FF?labelColor=08131D">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-E9B949?labelColor=08131D"></a>
@@ -24,7 +24,7 @@
 Paste this into Terminal:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/0xgeorgemathew/tapthatmac/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/0xgeorgemathew/TapThatMac/main/install.sh | bash
 ```
 
 It checks that your Mac has the motion sensor, downloads the latest release, verifies its checksum, installs **Tap That Mac** in Applications and opens it.
@@ -38,7 +38,7 @@ You'll need a **MacBook with Apple silicon** on **macOS 14 or later**. Desktop M
 
 <br>
 
-Download `TapThatMac-<version>.dmg` from [Releases](https://github.com/0xgeorgemathew/tapthatmac/releases) and drag the app to Applications. The app is signed but not notarized, so the first time macOS will say it can't check it. Open **System Settings › Privacy & Security** and choose **Open Anyway**, or run:
+Download `TapThatMac-<version>.dmg` from [Releases](https://github.com/0xgeorgemathew/TapThatMac/releases) and drag the app to Applications. The app is signed but not notarized, so the first time macOS will say it can't check it. Open **System Settings › Privacy & Security** and choose **Open Anyway**, or run:
 
 ```sh
 xattr -dr com.apple.quarantine "/Applications/Tap That Mac.app"
@@ -124,7 +124,7 @@ Run the install command again to update. Your settings and calibration are kept.
 To remove Tap That Mac:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/0xgeorgemathew/tapthatmac/main/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/0xgeorgemathew/TapThatMac/main/install.sh | bash -s -- --uninstall
 ```
 
 Add `--purge` to also delete your settings and calibration and reset its permission grants. Use `--version v0.1.0-beta.1` to install a specific release.
@@ -139,7 +139,7 @@ Tap That Mac is the new name. On first launch it copies your old preferences and
 
 ## What's not known yet
 
-Tap That Mac is a beta and hasn't been tried on many Macs yet. Some MacBooks may read the sensor differently. It hasn't been proven reliable on every kind of desk. It can't tell left taps from right taps. The graph shows motion, and a spike above the line is not always a tap. If yours misbehaves, [open an issue](https://github.com/0xgeorgemathew/tapthatmac/issues) with your Mac model, macOS version and where you tapped.
+Tap That Mac is a beta and hasn't been tried on many Macs yet. Some MacBooks may read the sensor differently. It hasn't been proven reliable on every kind of desk. It can't tell left taps from right taps. The graph shows motion, and a spike above the line is not always a tap. If yours misbehaves, [open an issue](https://github.com/0xgeorgemathew/TapThatMac/issues) with your Mac model, macOS version and where you tapped.
 
 <br>
 
