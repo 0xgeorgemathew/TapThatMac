@@ -53,7 +53,8 @@ final class MotionGraphViewTests: XCTestCase {
             trace.append(time: time, amplitude: peak, threshold: 0.0065,
                          impulseAmplitude: peak * 0.65, impulseThreshold: 0.00375)
         }
-        let snapshot = MotionGraphSnapshot(time: 8, points: trace.points, minimum: 0.006)
+        let taps = [90, 105, 220].map { TapMark(time: Double($0) * 0.021, paired: $0 < 200) }
+        let snapshot = MotionGraphSnapshot(time: 8, points: trace.points, minimum: 0.006, taps: taps)
         let url = URL(fileURLWithPath: directory)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         for scale in MotionGraphScale.allCases {

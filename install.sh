@@ -357,7 +357,7 @@ step 1 "Allow Accessibility, so a double-tap can run an action."
 step 2 "Allow Input Monitoring, so taps while you type are ignored."
 step 3 "In Actions, choose what a double-tap does. Lock Mac is a good first pick."
 printf '\n  %sThe Live view opens the right System Settings page for each permission.%s\n' "$DIM" "$RESET"
-printf '  %sThe command ring is pre-alpha. Try it safely with Preview command ring.%s\n' "$DIM" "$RESET"
+printf '  %sThe command ring is pre-alpha. Try it safely in Actions › Try the ring safely.%s\n' "$DIM" "$RESET"
 for dir in /Applications "$HOME/Applications"; do
   if [ -d "$dir/$LEGACY_APP" ]; then
     if [ "$fancy" = 1 ]; then printf '\n  %s!%s  ' "$GOLD" "$RESET"; else printf '\n  ! '; fi

@@ -2,163 +2,31 @@ import AppKit
 import SwiftUI
 import TapCore
 
-// MARK: - Material hosting
+// MARK: - Geometry
 
-/// The backing material under the ring. Reduce Transparency takes precedence
-/// over both material branches and selects the opaque surface.
-enum RingMaterialKind {
-    case liquidGlass
-    case legacyBlur
-    case opaque
-}
+/// Ring proportions as fractions of its diameter, shared by the hit regions,
+/// the artwork and the Actions pane's miniature.
+enum RingGeometry {
+    static let outer = 0.47
+    static let inner = 0.245
+    static let label = 0.355
+    static let hub = 0.43
+    static var count: Int { Command.allCases.count }
+    static var sweep: Double { 360 / Double(count) }
 
-/// One circular AppKit material host with the SwiftUI controls installed
-/// inside it. On macOS 26+ the hosting view is assigned to
-/// NSGlassEffectView.contentView because only the content view is guaranteed
-/// to sit inside the glass effect; arbitrary subviews are not. The same
-/// hosting view is reused when the material changes, so accessibility
-/// preference flips while the ring is open keep selected and committing state.
-struct MaterialHost: NSViewRepresentable {
-    var material: RingMaterialKind
-    var interactive: Bool
-    var content: RingContent
-
-    final class Coordinator {
-        var hosting: NSHostingView<RingContent>?
-        var installedMaterial: RingMaterialKind?
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeNSView(context: Context) -> NSView {
-        let container = MaterialContainerView()
-        let hosting = NSHostingView(rootView: content)
-        context.coordinator.hosting = hosting
-        context.coordinator.installedMaterial = material
-        container.install(hosting: hosting, material: material)
-        container.setInteractive(interactive)
-        return container
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        let coordinator = context.coordinator
-        coordinator.hosting?.rootView = content
-        guard let container = nsView as? MaterialContainerView else { return }
-        if coordinator.installedMaterial != material {
-            coordinator.installedMaterial = material
-            if let hosting = coordinator.hosting {
-                container.install(hosting: hosting, material: material)
-            }
-        }
-        container.setInteractive(interactive)
+    /// Center of item `index`, clockwise from twelve o'clock.
+    static func position(_ index: Int, size: CGFloat, radius: Double = label) -> CGPoint {
+        let angle = (Double(index) * sweep - 90) * .pi / 180
+        return CGPoint(x: size / 2 + cos(angle) * size * radius, y: size / 2 + sin(angle) * size * radius)
     }
 }
 
-/// Keeps the backing material installed and fills it to the container. Each
-/// material view rounds itself to a circle as it lays out.
-final class MaterialContainerView: NSView {
-    var backing: NSView?
-
-    override func layout() {
-        super.layout()
-        // The panel is square but the ring is the circle inscribed in it.
-        // Clipping here zeroes every stray square alpha pixel around the
-        // glass, so the window shadow, which AppKit derives from the rendered
-        // content shape, follows the circle instead of the frame rectangle.
-        wantsLayer = true
-        layer?.masksToBounds = true
-        layer?.cornerRadius = bounds.width / 2
-    }
-
-    func install(hosting: NSView, material: RingMaterialKind) {
-        backing?.removeFromSuperview()
-        if #available(macOS 26.0, *), material == .liquidGlass {
-            let glass = CircularGlassEffectView()
-            glass.style = .regular
-            glass.contentView = hosting
-            backing = glass
-        } else if material == .opaque {
-            let surface = CircularOpaqueView()
-            surface.addSubview(hosting)
-            backing = surface
-        } else {
-            // macOS 14/15 fallback: legacy vibrancy material, not Liquid Glass.
-            let effect = CircularVisualEffectView()
-            effect.material = .popover
-            effect.blendingMode = .behindWindow
-            effect.state = .active
-            effect.addSubview(hosting)
-            backing = effect
-        }
-        if let backing {
-            backing.frame = bounds
-            backing.autoresizingMask = [.width, .height]
-            addSubview(backing)
-        }
-        hosting.frame = bounds
-        hosting.autoresizingMask = [.width, .height]
-    }
-
-    /// Interactive glass feedback exists from macOS 27 only; on 26 the glass
-    /// stays static and is not promised interactive deformation.
-    func setInteractive(_ interactive: Bool) {
-        guard #available(macOS 26.0, *), let glass = backing as? NSGlassEffectView else { return }
-        // effectIsInteractive is in the macOS 27 SDK (Swift 6.4); older SDKs build without it.
-        #if compiler(>=6.4)
-        if #available(macOS 27.0, *) {
-            glass.effectIsInteractive = interactive
-        }
-        #endif
-    }
-
-}
-
-@available(macOS 26.0, *)
-final class CircularGlassEffectView: NSGlassEffectView {
-    // The panel is a square hosting a circular surface, so keep the glass
-    // fully round whenever the hosting view lays it out.
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        cornerRadius = newSize.width / 2
-    }
-}
-
-final class CircularVisualEffectView: NSVisualEffectView {
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        wantsLayer = true
-        layer?.cornerRadius = newSize.width / 2
-        layer?.masksToBounds = true
-    }
-}
-
-final class CircularOpaqueView: NSView {
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        wantsLayer = true
-        layer?.cornerRadius = newSize.width / 2
-        layer?.masksToBounds = true
-        updateSurfaceColor()
-    }
-    private func updateSurfaceColor() {
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        }
-    }
-
-    // Re-resolve the surface color if the system appearance changes while the
-    // ring is open.
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        updateSurfaceColor()
-    }
-}
-
+/// Pointer hit region for one command: the full wedge between hub and rim.
 struct Sector: Shape {
     let index: Int
     func path(in rect: CGRect) -> Path {
         let center = CGPoint(x: rect.midX, y: rect.midY)
-        let sweep = 360.0 / Double(Command.allCases.count)
+        let sweep = RingGeometry.sweep
         let start = Double(index) * sweep - 90 - sweep / 2 + 1
         let end = start + sweep - 2
         var path = Path()
@@ -169,15 +37,18 @@ struct Sector: Shape {
     }
 }
 
-/// A softly rounded annular segment. The artwork is independent of Sector,
-/// which keeps pointer hit regions unchanged while the highlight travels.
-private struct RingSelectionSurface: Shape {
+/// A softly rounded annular segment at twelve o'clock. Rotated to travel; the
+/// hit regions above never move, so fast navigation never shifts targets.
+struct RingSelectionSurface: Shape {
+    var corner: CGFloat = 12
+    var gap: Double = 0.05
+
     func path(in rect: CGRect) -> Path {
         let center = CGPoint(x: rect.midX, y: rect.midY)
-        let outer = rect.width * 0.468
-        let inner = rect.width * 0.248
-        let corner = ReactorTheme.surfaceRadius
-        let halfSweep = .pi / Double(Command.allCases.count) - 0.045
+        let outer = rect.width * RingGeometry.outer
+        let inner = rect.width * (RingGeometry.inner + 0.005)
+        let corner = min(self.corner, (outer - inner) / 3)
+        let halfSweep = .pi / Double(RingGeometry.count) - gap
         let start = -.pi / 2 - halfSweep
         let end = -.pi / 2 + halfSweep
         let outerInset = Double(corner / outer)
@@ -204,6 +75,120 @@ private struct RingSelectionSurface: Shape {
     }
 }
 
+/// The lit edge of the selection: a short arc along the rim at twelve o'clock.
+struct RingPointerArc: Shape {
+    func path(in rect: CGRect) -> Path {
+        let half = RingGeometry.sweep / 2 - 9
+        var path = Path()
+        path.addArc(center: CGPoint(x: rect.midX, y: rect.midY), radius: rect.width * (RingGeometry.outer + 0.012),
+                    startAngle: .degrees(-90 - half), endAngle: .degrees(-90 + half), clockwise: false)
+        return path
+    }
+}
+
+/// Hairline spokes between the commands.
+struct RingSpokes: Shape {
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        var path = Path()
+        for index in 0..<RingGeometry.count {
+            let angle = (Double(index) * RingGeometry.sweep - 90 + RingGeometry.sweep / 2) * .pi / 180
+            let from = rect.width * (RingGeometry.inner + 0.03), to = rect.width * (RingGeometry.outer - 0.03)
+            path.move(to: CGPoint(x: center.x + cos(angle) * from, y: center.y + sin(angle) * from))
+            path.addLine(to: CGPoint(x: center.x + cos(angle) * to, y: center.y + sin(angle) * to))
+        }
+        return path
+    }
+}
+
+/// The disc: the same lifted graphite as the app's cards, with a hairline, a
+/// top highlight and a deep soft shadow so it floats over any desktop.
+struct RingDisc: View {
+    var shadow = true
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        Circle()
+            .fill(LinearGradient(colors: [Theme.discTop, Theme.discBottom], startPoint: .top, endPoint: .bottom))
+            .overlay {
+                Circle().fill(RadialGradient(colors: [Theme.signal.opacity(scheme == .dark ? 0.07 : 0.04), .clear],
+                                             center: .center, startRadius: 0, endRadius: 240))
+            }
+            .overlay {
+                RingSpokes().stroke(contrast == .increased ? Theme.muted : Theme.hairline, lineWidth: 1)
+            }
+            .overlay { Circle().strokeBorder(contrast == .increased ? Theme.muted : Theme.hairline, lineWidth: 1) }
+            .overlay {
+                Circle().strokeBorder(LinearGradient(colors: [Theme.highlight, .clear], startPoint: .top, endPoint: .center),
+                                      lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(shadow ? (scheme == .dark ? 0.5 : 0.18) : 0), radius: 28, y: 14)
+            .shadow(color: .black.opacity(shadow ? 0.12 : 0), radius: 2, y: 1)
+    }
+}
+
+/// The traveling selection: tinted segment, top-lit edge, glowing rim arc.
+struct RingSelectionHighlight: View {
+    var flash = false
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        // Light appearance needs far less tint for the same presence.
+        let strength = scheme == .dark ? 1.0 : 0.55
+        ZStack {
+            RingSelectionSurface()
+                .fill(LinearGradient(colors: [Theme.signal.opacity((flash ? 0.42 : 0.22) * strength),
+                                              Theme.signal.opacity((flash ? 0.2 : 0.07) * strength)],
+                                     startPoint: .top, endPoint: .bottom))
+            RingSelectionSurface()
+                .stroke(LinearGradient(colors: [Theme.signal.opacity(contrast == .increased ? 0.9 : 0.55),
+                                                Theme.signal.opacity(contrast == .increased ? 0.9 : 0.08)],
+                                       startPoint: .top, endPoint: .bottom),
+                        lineWidth: contrast == .increased ? 1.5 : 1)
+            RingPointerArc()
+                .stroke(Theme.signal, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .shadow(color: Theme.signal.opacity(0.8), radius: 6)
+        }
+        .shadow(color: Theme.signal.opacity(flash ? 0.5 : 0.18), radius: flash ? 22 : 14)
+    }
+}
+
+/// One command's icon and name, positioned on the ring.
+struct RingItemLabel: View {
+    let command: Command
+    let selected: Bool
+    var compact = false
+
+    var body: some View {
+        VStack(spacing: compact ? 3 : 6) {
+            Image(systemName: command.symbol)
+                .font(.system(size: compact ? 11 : 21, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? Theme.signal : Theme.ink.opacity(0.78))
+                .shadow(color: Theme.signal.opacity(selected ? 0.6 : 0), radius: 8)
+                .frame(height: compact ? 12 : 24)
+            if !compact {
+                VStack(spacing: 1) {
+                    if let family = command.family {
+                        Text(family.uppercased())
+                            .font(.system(size: 8, weight: .bold))
+                            .tracking(0.7)
+                            .foregroundStyle(selected ? Theme.signal.opacity(0.8) : Theme.faint)
+                    }
+                    Text(command.shortName)
+                        .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
+                        .foregroundStyle(selected ? Theme.ink : Theme.muted)
+                }
+                .multilineTextAlignment(.center)
+                .frame(width: 84)
+            }
+        }
+    }
+}
+
+// MARK: - The live ring
+
 /// Captures the interpolated angle without publishing state or scheduling a
 /// second layout pass. Pointer retargeting can start from what is on screen.
 private struct PresentedSelectionRotation: AnimatableModifier {
@@ -223,46 +208,27 @@ private struct PresentedSelectionRotation: AnimatableModifier {
 
 private struct RingOptionStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        // Preserve the option's appearance when confirmation disables input.
         // The hub supplies press feedback; the plain style would dim the ring.
         configuration.label
     }
 }
 
-/// One persistent selection surface moves over the native material. Controls
-/// stay fixed so fast navigation never moves the targets beneath the pointer.
+/// One persistent selection surface travels over a still disc. Controls stay
+/// fixed so fast navigation never moves the targets beneath the pointer.
 struct RingContent: View {
     @ObservedObject var state: RingState
     let size: CGFloat
     let reduceMotion: Bool
-    @Environment(\.colorSchemeContrast) private var contrast
-    private let accent = ReactorTheme.accent
+    @State private var arrived = false
 
     var body: some View {
         ZStack {
-            RingSelectionSurface()
-                .fill(accent.opacity(contrast == .increased ? 0.23 : 0.13))
-                .overlay {
-                    // Top-lit glass rim on the pill-shaped segment, matching
-                    // the edge treatment of the settings panes' cards.
-                    RingSelectionSurface()
-                        .stroke(
-                            LinearGradient(
-                                colors: contrast == .increased
-                                    ? [accent.opacity(0.75), accent.opacity(0.75)]
-                                    : [accent.opacity(0.45), accent.opacity(0.1)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: contrast == .increased ? 1.5 : 1
-                        )
-                }
-                .overlay {
-                    RingSelectionSurface()
-                        .stroke(Color.primary.opacity(contrast == .increased ? 0 : 0.06), lineWidth: 0.5)
-                }
+            RingDisc()
+
+            RingSelectionHighlight(flash: state.committing != nil)
                 .modifier(PresentedSelectionRotation(angle: state.selectionAngle, state: state))
                 .animation(reduceMotion ? nil : RingMotion.selection, value: state.selectionAngle)
+                .animation(reduceMotion ? nil : RingMotion.confirmation, value: state.committing)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
 
@@ -272,21 +238,23 @@ struct RingContent: View {
                 Button { state.choose?(command) } label: {
                     ZStack {
                         shape.fill(.clear)
-                        VStack(spacing: 9) {
-                            Image(systemName: command.symbol)
-                                .font(.system(size: 23, weight: isSelected ? .medium : .regular))
-                                .frame(height: 26)
-                            Text(command.rawValue)
-                                .font(.system(size: 10, weight: isSelected ? .semibold : .medium, design: .rounded))
-                                .multilineTextAlignment(.center)
-                                .frame(width: 82)
-                        }
-                        .foregroundStyle(isSelected ? accent : Color.primary.opacity(0.82))
-                        .position(position(index, size: size))
+                        RingItemLabel(command: command, selected: isSelected)
+                            .scaleEffect(isSelected && !reduceMotion ? 1.06 : 1)
+                            .animation(reduceMotion ? nil : RingMotion.selection, value: isSelected)
+                            // Arrival: items settle in clockwise, a few ms apart.
+                            .opacity(arrived || reduceMotion ? 1 : 0)
+                            .offset(y: arrived || reduceMotion ? 0 : 6)
+                            .animation(reduceMotion ? nil : RingMotion.opening.delay(Double(index) * 0.018),
+                                       value: arrived)
+                            .position(RingGeometry.position(index, size: size))
                     }
                     .contentShape(shape)
                 }
                 .buttonStyle(RingOptionStyle())
+                // The ring has its own keyboard model (arrows, Return, Esc)
+                // and the selection is its focus; no system focus ring.
+                .focusable(false)
+                .focusEffectDisabled()
                 .disabled(state.automaticAction || state.committing != nil)
                 .onHover { inside in
                     if inside && !state.automaticAction && state.committing == nil {
@@ -298,11 +266,7 @@ struct RingContent: View {
             }
             CenterReadout(state: state, size: size, reduceMotion: reduceMotion)
         }
-        .clipShape(Circle())
-    }
-
-    private func position(_ index: Int, size: CGFloat) -> CGPoint {
-        let angle = (Double(index) * (360 / Double(Command.allCases.count)) - 90) * Double.pi / 180
-        return CGPoint(x: size / 2 + cos(angle) * size * 0.35, y: size / 2 + sin(angle) * size * 0.35)
+        .frame(width: size, height: size)
+        .onAppear { arrived = true }
     }
 }

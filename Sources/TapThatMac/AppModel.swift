@@ -4,6 +4,12 @@ import ServiceManagement
 import TapCore
 import Combine
 
+/// One accepted tap, and whether it completed or opened a recognized pair.
+struct TapMark: Equatable {
+    let time: Double
+    var paired = false
+}
+
 enum InputMode: String { case sensor = "Direct sensor", helper = "Sensor helper", simulated = "Simulated input" }
 
 enum SensorRecoveryPolicy {
@@ -82,6 +88,7 @@ final class AppModel: ObservableObject {
     private(set) var knocks = 0
     private(set) var recognizedPairs = 0
     private var lastLoggedRejection = -Double.infinity
+    private var lastLoggedReason = ""
     private(set) var lastDoubleTime: Double?
     @Published var typingPermission = false
     @Published var accessibilityPermission = false
@@ -94,13 +101,15 @@ final class AppModel: ObservableObject {
     let ring = RadialPanelController()
     private let sensor = BufferedSensorReader()
     private let helper = HelperClient()
-    private let toast = AcknowledgmentController()
+    private lazy var toast = AcknowledgmentController(isRedundant: { [weak self] in
+        NSApp.isActive && self?.setupIsVisible == true
+    })
     private var detector = KnockDetector()
     private var applyingProfile = false
     // Published observers run during init after all stored properties exist.
     // Restore the complete detector and profile before enabling edit side effects.
     private var isRestoringSettings = true
-    private var router = GestureRouter()
+    private var router = GestureRouter(burstGuard: KnockPolicy.pairBurstGuard)
     private var lastKeyTime: Double?
     private var timer: Timer?
     private let typingMonitor = TypingMonitor()
@@ -127,6 +136,10 @@ final class AppModel: ObservableObject {
     let liveAmplitude = PassthroughSubject<Double, Never>()
     /// Fires once per accepted tap (each member of a pair fires once).
     let tapDetected = PassthroughSubject<Void, Never>()
+    /// Fires once per recognized double-tap, whatever it then does.
+    let doubleTapRecognized = PassthroughSubject<Void, Never>()
+    /// Recent accepted taps in sensor time, for the graph's tap markers.
+    private(set) var recentTaps: [TapMark] = []
     private var lastLiveAmplitudeAt = 0.0
     private var liveLevel = 0.0
     private var collectGraph = false
@@ -209,7 +222,7 @@ final class AppModel: ObservableObject {
         applyingProfile = true
         sensitivity = settings.sensitivity
         detector.settings = settings
-        router = GestureRouter(maximumInterval: settings.maximumTapInterval)
+        router = GestureRouter(maximumInterval: settings.maximumTapInterval, burstGuard: KnockPolicy.pairBurstGuard)
         applyingProfile = false
         persistDetectorSettings()
         let profile = CalibrationProfile(session: session, settings: settings)
@@ -231,7 +244,7 @@ final class AppModel: ObservableObject {
         applyingProfile = true
         sensitivity = settings.sensitivity
         detector.settings = settings
-        router = GestureRouter(maximumInterval: settings.maximumTapInterval)
+        router = GestureRouter(maximumInterval: settings.maximumTapInterval, burstGuard: KnockPolicy.pairBurstGuard)
         applyingProfile = false
         activeCalibrationProfile = profile
         persistDetectorSettings()
@@ -272,7 +285,7 @@ final class AppModel: ObservableObject {
         sensitivity = savedSettings.sensitivity
         suppressTyping = savedSettings.suppressTyping
         detector.settings = savedSettings
-        router = GestureRouter(maximumInterval: savedSettings.maximumTapInterval)
+        router = GestureRouter(maximumInterval: savedSettings.maximumTapInterval, burstGuard: KnockPolicy.pairBurstGuard)
         calibrationProfiles = loadCalibrationProfiles()
         if let rawID = settingsDefaults.string(forKey: "activeCalibrationProfileID"),
            let id = UUID(uuidString: rawID) {
@@ -299,6 +312,7 @@ final class AppModel: ObservableObject {
         })
         if NSApp?.isRunning == true { DispatchQueue.main.async { [weak self] in self?.requestLaunchPermissions() } }
         typingMonitor.onKey = { [weak self] in self?.noteKey() }
+        typingMonitor.onPointer = { [weak self] in self?.notePointer() }
         refreshPermissions()
         localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.noteKey(); return event
@@ -336,6 +350,13 @@ final class AppModel: ObservableObject {
         guard let data = settingsDefaults.data(forKey: "calibrationProfiles"),
               let profiles = try? JSONDecoder().decode([CalibrationProfile].self, from: data) else { return [] }
         return profiles
+    }
+    /// A click vetoes nearby contacts like a key does, but it isn't typing, so
+    /// calibration doesn't flag it.
+    private func notePointer() {
+        lastKeyTime = now
+        diagnostics.recent.appendKey(at: now)
+        if suppressTyping { pendingImpacts.removeAll(); router.reset() }
     }
     private func noteKey() {
         // Never retain characters, key codes, or application identity.
@@ -493,8 +514,14 @@ final class AppModel: ObservableObject {
                 diagnostics.log("impact", "\(detector.acceptedPath); onset=\(String(format: "%.3f", detector.acceptedOnset)); confirmed=\(String(format: "%.3f", sample.time))")
             }
             if detector.lastRejectionTime > lastLoggedRejection {
+                // A slow swell is re-rejected on every sample above threshold;
+                // log one line per distinct rejection, not one per sample.
+                let reason = detector.lastRejectionReason
+                if reason != lastLoggedReason || detector.lastRejectionTime - lastLoggedRejection > 0.25 {
+                    diagnostics.log("pulse", "\(reason); t=\(String(format: "%.3f", detector.lastRejectionTime))")
+                }
                 lastLoggedRejection = detector.lastRejectionTime
-                diagnostics.log("pulse", "\(detector.lastRejectionReason); t=\(String(format: "%.3f", lastLoggedRejection))")
+                lastLoggedReason = reason
             }
             if collectGraph {
                 motionTrace.append(time: sample.time, amplitude: detector.feature, threshold: detector.threshold,
@@ -504,12 +531,18 @@ final class AppModel: ObservableObject {
     }
     private func knock(at time: Double) {
         knocks += 1; diagnostics.markKnock(); diagnostics.log("knock", "\(input.rawValue); t=\(String(format: "%.3f", time))")
+        recentTaps.append(TapMark(time: time))
+        if recentTaps.count > 24 { recentTaps.removeFirst(recentTaps.count - 24) }
         tapDetected.send()
         for event in router.knock(at: time) { route(event, at: time) }
     }
     private func route(_ event: GestureEvent, at time: Double) {
         guard !calibration.blocksActions else { return }
-        if event == .double { recognizedPairs += 1 }
+        if event == .double {
+            recognizedPairs += 1
+            for index in recentTaps.indices.suffix(2) { recentTaps[index].paired = true }
+            doubleTapRecognized.send()
+        }
         // Ignore additional vibration while a lock request is in flight.
         guard !ring.state.automaticAction, ring.state.committing == nil, !awaitingLock else { return }
         guard input != .sensor || sampleRate >= 50 else { return }

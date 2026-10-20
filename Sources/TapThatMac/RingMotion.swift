@@ -6,10 +6,10 @@ import SwiftUI
 /// by the callers (the shell drops to nil animations, the controller to zero
 /// duration), not by these constants.
 enum RingMotion {
-    /// Shell appearance, a 0.96 -> 1 scale with fade. dampingFraction 0.94
-    /// overshoots by roughly 0.02% of the scale step: enough to feel like
-    /// arrival, far too little to read as a bounce.
-    static let opening = Animation.spring(response: 0.24, dampingFraction: 0.94)
+    /// Shell appearance, a 0.92 -> 1 scale with fade. dampingFraction 0.8
+    /// overshoots by under 1% of the scale step: the disc lands rather than
+    /// appears, without reading as a bounce. Items reuse it, staggered.
+    static let opening = Animation.spring(response: 0.3, dampingFraction: 0.8)
     /// Highlight travel across sectors. Damped harder than opening (0.96) so
     /// rapid retargeting never overshoots into the neighboring sector.
     static let selection = Animation.spring(response: 0.23, dampingFraction: 0.96)

@@ -46,6 +46,8 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
     private var opening = 0
     private let playSelectionSound: () -> Void
     private(set) var isOpen = false
+    private static let shadowMargin: CGFloat = 48
+    private var ringDiameter: CGFloat = 440
     var onDismiss: (() -> Void)?
     var onChoose: ((Command) -> Void)?
     private var presentationSelection: ((Command) -> Void)?
@@ -94,15 +96,19 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
         let pointer = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) ?? NSScreen.main else { return }
         let frame = screen.visibleFrame
-        let size = min(460.0, min(frame.width, frame.height))
+        // The panel is larger than the ring so the disc can cast its own soft
+        // shadow; only the circle itself takes input.
+        let ring = min(440.0, min(frame.width, frame.height) - 2 * Self.shadowMargin)
+        let size = ring + 2 * Self.shadowMargin
+        ringDiameter = ring
         let origin = NSPoint(x: frame.midX - size / 2, y: frame.midY - size / 2)
         let panel = RingPanel(contentRect: NSRect(origin: origin, size: NSSize(width: size, height: size)),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         panel.isFloatingPanel = true; panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = true
+        panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false
         panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false
-        panel.contentView = NSHostingView(rootView: RingView(state: state))
+        panel.contentView = NSHostingView(rootView: RingView(state: state, diameter: ring))
         panel.delegate = self; self.panel = panel; isOpen = true
         presentationSelection = selection ?? onChoose
         if let monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown], handler: { [weak self] event in
@@ -130,21 +136,10 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
         }) { monitors.append(monitor) }
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
-        // AppKit derives a borderless window's shadow from the rendered
-        // content shape. The ring fades in from transparent, so recompute the
-        // shadow once on screen and again after the opening spring settles;
-        // combined with the circular clip on MaterialContainerView this keeps
-        // the shadow on the circular glass instead of the square frame.
-        panel.invalidateShadow()
-        let shadowToken = opening
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            guard let self, self.isOpen, self.opening == shadowToken, let panel = self.panel else { return }
-            panel.invalidateShadow()
-        }
     }
     private func insideCircle(_ point: NSPoint) -> Bool {
         guard let panel else { return false }
-        return hypot(point.x - panel.frame.midX, point.y - panel.frame.midY) <= panel.frame.width / 2
+        return hypot(point.x - panel.frame.midX, point.y - panel.frame.midY) <= ringDiameter / 2
     }
     func advance(by step: Int = 1) {
         guard isOpen, !state.automaticAction, state.committing == nil else { return }
@@ -199,32 +194,21 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) { dismiss(restoreFocus: false) }
 }
 
-/// The outer animated shell. It owns the opening spring and scales the single
-/// material host as one unit, so the material never appears at full size
-/// while only the labels animate.
+/// The outer animated shell. It owns the opening spring and scales the disc
+/// as one unit; the items inside settle in a beat later.
 private struct RingView: View {
     @ObservedObject var state: RingState
+    let diameter: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var appeared = false
 
-    private var material: RingMaterialKind {
-        if reduceTransparency { return .opaque }
-        if #available(macOS 26.0, *) { return .liquidGlass }
-        return .legacyBlur
-    }
-
     var body: some View {
-        GeometryReader { geometry in
-            MaterialHost(
-                material: material,
-                interactive: !reduceMotion && !state.automaticAction && state.committing == nil,
-                content: RingContent(state: state, size: geometry.size.width, reduceMotion: reduceMotion))
-        }
-        .scaleEffect(reduceMotion ? 1 : !appeared || !state.isPresented ? 0.96 : 1)
-        .opacity(appeared && state.isPresented ? 1 : 0)
-        .animation(reduceMotion ? nil : RingMotion.opening, value: appeared)
-        .animation(reduceMotion ? nil : RingMotion.exit, value: state.isPresented)
-        .onAppear { appeared = true }
+        RingContent(state: state, size: diameter, reduceMotion: reduceMotion)
+            .scaleEffect(reduceMotion ? 1 : !appeared ? 0.92 : state.isPresented ? 1 : 0.97)
+            .opacity(appeared && state.isPresented ? 1 : 0)
+            .animation(reduceMotion ? nil : RingMotion.opening, value: appeared)
+            .animation(reduceMotion ? nil : RingMotion.exit, value: state.isPresented)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onAppear { appeared = true }
     }
 }
