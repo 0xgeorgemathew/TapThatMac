@@ -56,7 +56,7 @@ That clears the download flag for this one app. It doesn't turn off Gatekeeper.
 | Permission | Why |
 | --- | --- |
 | **Accessibility** | Lets a double-tap lock the screen, control media or press a ChatGPT button. |
-| **Input Monitoring** | Lets it ignore taps that land while you're typing. It looks only at key timing, never at what you type. |
+| **Input Monitoring** | Lets it ignore taps that land while you're typing or clicking, since a trackpad click shakes the Mac like a tap. It looks only at timing, never at what you type or where you click. |
 
 **2. Choose what a double-tap does.** Open **Actions** and choose one. **Lock Mac** is a good first choice.
 
@@ -68,19 +68,19 @@ That clears the download flag for this one app. It doesn't turn off Gatekeeper.
 
 ## One double-tap, one action
 
-<img src="media/actions.png" alt="The Actions view with the double-tap picker, beside the list of actions: Lock Mac, Play / Pause, Next Track and Previous Track work; Ring is pre-alpha; ChatGPT controls are experimental">
+<img src="media/actions.png" alt="The Actions view: a tile for each action, grouped as works today, the pre-alpha command ring and experimental ChatGPT controls, beside the same list with its status tags">
 
-Pick a single action for a double-tap. **Lock Mac**, **Play / Pause**, **Next Track** and **Previous Track** work today. Before Lock Mac or Play / Pause runs, a ring flashes up and highlights it, so you can see what your taps did. A quiet chime and a trackpad tick confirm it; press Escape in that moment to cancel.
+Pick a single action for a double-tap from the tiles in **Actions**. **Lock Mac**, **Play / Pause**, **Next Track** and **Previous Track** work today. Before Lock Mac or Play / Pause runs, a ring flashes up and highlights it, so you can see what your taps did. A quiet chime and a trackpad tick confirm it; press Escape in that moment to cancel.
 
 The **ChatGPT controls** (Approve once, Reject, Dictation) press the matching button on the ChatGPT page you have open. They're experimental.
 
 ## See every tap
 
-<img src="media/live.png" alt="The Live view: the streaming accelerometer graph at 806 Hz, with the gold threshold, and a legend for motion, light-tap impulse and threshold">
+<img src="media/live.png" alt="The Live view: tap and double-tap counts, the streaming accelerometer graph at 806 Hz with the gold threshold, and the mode switch in the sidebar, beside a legend for motion, light-tap impulse and threshold">
 
-The **Live** view draws the sensor 800 times a second. **Cyan** is all motion. **Violet** picks out the sharp start of a light tap. The **gold** line is the threshold a tap has to cross: drag it down if your taps don't register, up if bumps set it off, or choose **Set for light taps**.
+The **Live** view draws the sensor 800 times a second. **Cyan** is all motion. **Violet** picks out the sharp start of a light tap. The **gold** line is the threshold a tap has to cross: drag its pill down if your taps don't register, up if bumps set it off, or choose **Light taps**. Every tap leaves a mark on the graph, and a recognized double-tap gets a bracket, so you can see which taps counted.
 
-The mode switch at the bottom of every view decides what happens:
+The **Mode** switch in the sidebar decides what happens:
 
 - **Active** runs your action.
 - **Test** shows what it recognized without running anything. Use it while you get a feel for it.
@@ -88,7 +88,7 @@ The mode switch at the bottom of every view decides what happens:
 
 ## Tuned to your desk
 
-<img src="media/calibrate.png" alt="Calibration: Tune for your desk, with a choice of open Mac on desk or closed Mac with an external display, and the five rounds it records">
+<img src="media/calibrate.png" alt="Calibration: Tune it to your desk, with a choice of open Mac on desk or closed Mac with an external display, and the five rounds it records">
 
 Every desk feels different. Choose **Calibrate…** in Live, pick **Open Mac on desk** or **Closed Mac · external display**, and follow along for about two minutes. It records ordinary desk activity first, then your own taps and knocks, singly and in pairs, and finishes with a fresh round that checks the new settings. A profile is applied only if it passes that check; if calibration fails, your current settings stay. Keep one profile per setup and switch between them as you move. Lap use isn't supported.
 
@@ -105,15 +105,17 @@ Set the double-tap to **Ring** and every action sits on a wheel:
 - **Double-tap** again runs the highlighted action.
 - Arrow keys, Return, Escape and the pointer work too.
 
+Two dots in the middle of the ring light up as your taps land, so you can see whether it heard one tap or two.
+
 > [!WARNING]
-> **The ring is pre-alpha.** Telling a single tap from a double depends on timing (450 ms by default, and calibration can stretch it), and that isn't reliable yet. Expect the highlight to skip a step, miss a tap, or choose too early. To try it without consequences, use **Actions › Preview command ring**: it never runs anything. Bug reports with your Mac model and where you tapped are very welcome.
+> **The ring is pre-alpha.** Telling a single tap from a double depends on timing (450 ms by default, and calibration can stretch it), and that isn't reliable yet. Expect the highlight to skip a step, miss a tap, or choose too early. To try it without consequences, choose the ring in **Actions** and press **Try the ring safely**: it never runs anything. Bug reports with your Mac model and where you tapped are very welcome.
 
 <br>
 
 ## Private by design
 
 - **Nothing leaves your Mac.** Tap That Mac has no network code: no analytics, no accounts, no update checks.
-- **It reads motion, not keystrokes.** Input Monitoring is used only to learn *when* a key was pressed, so taps during typing can be ignored.
+- **It reads motion, not keystrokes.** Input Monitoring is used only to learn *when* a key was pressed or the trackpad clicked, so those bumps can be ignored.
 - **Your calibration stays local**, in `~/Library/Application Support/Tap That Mac/`.
 - **No third-party code.** Swift, SwiftUI and AppKit, with no package dependencies.
 
@@ -145,7 +147,7 @@ Tap That Mac is a beta and hasn't been tried on many Macs yet. Some MacBooks may
 
 ## Build from source
 
-Requires Xcode 26 or newer: the app uses the macOS 26 SDK for Liquid Glass and falls back to older materials on macOS 14 and 15. The package uses Swift 5 language mode.
+Requires Xcode 26 or newer. The app runs on macOS 14 and later; every surface, the graph and the ring draw from one set of design tokens in `Sources/TapThatMac/Design.swift`. The package uses Swift 5 language mode.
 
 ```sh
 swift build && swift test         # build and run the test suites

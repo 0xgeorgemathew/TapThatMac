@@ -7,8 +7,9 @@ The captures are real Tap That Mac windows, taken with `screencapture -o -l <win
 script only frames them. Each image is an HTML page screenshotted by headless Chrome at 2x, so a
 1x window capture placed at half its width lands on the page pixel for pixel.
 
-Palette, from the Live graph: cyan is motion, violet is the light-tap impulse, gold is the
-threshold a tap must cross. The hero's double-tap trace is drawn, not captured.
+Palette, from the app's Design.swift: graphite surfaces; cyan is motion, violet is the
+light-tap impulse, gold is the threshold a tap must cross. Type is SF, with small tracked caps
+for labels, as in the app. The hero's double-tap trace is drawn, not captured.
 """
 
 import random
@@ -27,35 +28,35 @@ FONTS = ("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:"
          "opsz,wdth,wght@12..96,75..100,400..800&display=block")
 
 BASE_CSS = """
-:root { --abyss:#08131D; --deep:#0E2030; --ink:#EAF2F8; --muted:rgba(234,242,248,.62);
-  --faint:rgba(234,242,248,.38); --rule:rgba(127,211,247,.12);
+:root { --abyss:#0B0F14; --deep:#141A21; --ink:#EEF2F6; --muted:rgba(238,242,246,.62);
+  --faint:rgba(238,242,246,.38); --rule:rgba(255,255,255,.05);
   --cyan:#7FD3F7; --violet:#B9A6FF; --gold:#E9B949; --rose:#FF6F86; }
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body { background:transparent; }
 body { position:relative; overflow:hidden; color:var(--ink);
   font:400 14px/1.45 -apple-system, "SF Pro Text", system-ui; -webkit-font-smoothing:antialiased; }
 .stage { position:absolute; inset:0; border-radius:18px; overflow:hidden; background:var(--abyss);
-  box-shadow: inset 0 0 0 1px rgba(127,211,247,.10); }
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
 .grid { position:absolute; inset:0;
   background-image: linear-gradient(to right, var(--rule) 1px, transparent 1px),
                     linear-gradient(to bottom, var(--rule) 1px, transparent 1px);
   background-size: 44px 44px; background-position: -1px -1px;
   mask-image: radial-gradient(120% 90% at 70% 40%, #000 30%, transparent 85%); opacity:.55; }
-.display { font-family:"Bricolage Grotesque", -apple-system, system-ui; font-variation-settings:"wdth" 80;
-  font-weight:800; letter-spacing:-.035em; line-height:.9; }
-.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing:.06em; text-transform:uppercase; }
-.eyebrow { font: 600 10.5px/1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing:.14em;
-  text-transform:uppercase; color:var(--cyan); }
+.display { font-family:-apple-system, "SF Pro Display", system-ui; font-weight:800; letter-spacing:-.04em;
+  line-height:.95; }
+.mono { font-family:-apple-system, system-ui; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+.eyebrow { font: 650 10.5px/1 -apple-system, system-ui; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--faint); }
+.eyebrow.cyan { color:var(--cyan); }
 .window { position:absolute; border-radius:11px; overflow:hidden;
   box-shadow: 0 0 0 .5px rgba(255,255,255,.18), 0 28px 60px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.35); }
 .window img { display:block; }
-.tag { display:inline-block; font:700 9.5px/1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing:.12em;
-  padding:5px 7px 4px; border-radius:5px; text-transform:uppercase; }
-.tag.ready { color:var(--cyan); box-shadow: inset 0 0 0 1px rgba(127,211,247,.45); }
-.tag.alpha { color:#120B2A; background:var(--violet); }
-.tag.exp { color:var(--gold); box-shadow: inset 0 0 0 1px rgba(233,185,73,.5); }
-h2 { font-family:"Bricolage Grotesque", -apple-system, system-ui; font-variation-settings:"wdth" 85;
-  font-weight:750; font-size:30px; letter-spacing:-.025em; line-height:1; }
+.tag { display:inline-block; font:700 9px/1 -apple-system, system-ui; letter-spacing:.09em;
+  padding:4px 7px; border-radius:99px; text-transform:uppercase; }
+.tag.ready { color:var(--cyan); background:rgba(127,211,247,.1); box-shadow: inset 0 0 0 .75px rgba(127,211,247,.4); }
+.tag.alpha { color:var(--violet); background:rgba(185,166,255,.1); box-shadow: inset 0 0 0 .75px rgba(185,166,255,.4); }
+.tag.exp { color:var(--gold); background:rgba(233,185,73,.1); box-shadow: inset 0 0 0 .75px rgba(233,185,73,.4); }
+h2 { font-family:-apple-system, system-ui; font-weight:750; font-size:30px; letter-spacing:-.03em; line-height:1; }
 """
 
 
@@ -144,11 +145,10 @@ def hero(work):
 .brand { position:absolute; left:44px; top:40px; display:flex; align-items:center; gap:10px;
   font:650 15px -apple-system, system-ui; letter-spacing:-.01em; }
 .brand img { width:30px; height:30px; filter: drop-shadow(0 4px 10px rgba(0,0,0,.4)); }
-h1 { position:absolute; left:42px; top:104px; font-size:76px; width:440px; letter-spacing:-.01em;
-  font-variation-settings:"wdth" 88, "opsz" 96; font-weight:780; }
+h1 { position:absolute; left:42px; top:104px; font-size:70px; width:440px; }
 .lede { position:absolute; left:44px; top:268px; width:330px; font-size:15px; line-height:1.5; color:var(--muted); }
 .trace { position:absolute; left:0; top:372px; }
-.svgmono { font: 600 10px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing:.14em; }
+.svgmono { font: 700 10px -apple-system, system-ui; letter-spacing:.12em; }
 """
     capture("hero", body, w, h, work, css)
 
@@ -167,9 +167,9 @@ def actions(work):
     body = f"""
 <div class=stage>
   <div class=grid></div>
-  <div class="window" style="left:36px;top:36px">{shot("actions", 0, 0, 1000, 548, 0.46)}</div>
+  <div class="window" style="left:36px;top:36px">{shot("actions", 0, 0, 1000, 900, 0.4)}</div>
   <div class=col>
-    <div class=eyebrow>A double-tap can</div>
+    <div class="eyebrow cyan">A double-tap can</div>
     <ul>{items}</ul>
     <p>Pick one in <b>Actions</b>. Lock Mac and Play / Pause show a quick ring animation before they run.</p>
   </div>
@@ -203,18 +203,17 @@ def ring(work):
     css = """
 .desk { background:
   radial-gradient(45% 60% at 26% 55%, rgba(127,211,247,.13), transparent 70%),
-  radial-gradient(45% 60% at 70% 55%, rgba(185,166,255,.12), transparent 70%), var(--abyss); }
+  radial-gradient(45% 60% at 70% 55%, rgba(185,166,255,.10), transparent 70%), var(--abyss); }
 .stamp { position:absolute; left:36px; top:30px; display:flex; align-items:center; gap:12px;
   font-size:13px; color:var(--muted); }
-.ring { position:absolute; top:84px; width:250px; height:250px;
-  filter: drop-shadow(0 24px 40px rgba(0,0,0,.55)); }
-.r1 { left:84px; } .r2 { left:470px; }
+.ring { position:absolute; top:58px; width:304px; height:304px; }
+.r1 { left:57px; } .r2 { left:443px; }
 .step { position:absolute; top:168px; width:110px; text-align:center; }
-.step .mono { font:700 11px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing:.14em; color:var(--violet); }
+.step .mono { font:700 11px -apple-system, system-ui; letter-spacing:.12em; color:var(--violet); }
 .step .arrow { font-size:26px; color:var(--violet); line-height:1.1; }
 .step .note { font-size:12px; color:var(--muted); margin-top:4px; }
 .opens { position:absolute; left:84px; top:352px; width:250px; text-align:center; font-size:12px; color:var(--muted); }
-.opens .mono { font:700 11px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing:.14em; color:var(--cyan); margin-right:4px; }
+.opens .mono { font:700 11px -apple-system, system-ui; letter-spacing:.12em; color:var(--cyan); margin-right:4px; }
 """
     capture("ring", body, w, h, work, css)
 
@@ -224,15 +223,15 @@ def live(work):
     legend = [
         ("cyan", "Motion", "Everything the sensor feels: taps, typing, a bumped desk."),
         ("violet", "Light-tap impulse", "The sharp start of a tap, picked out of the motion."),
-        ("gold", "Threshold", "A tap has to rise above it. Drag it, or choose Set for light taps."),
+        ("gold", "Threshold", "A tap has to rise above it. Drag the gold pill, or choose Light taps."),
     ]
     items = "".join(f"<li><i class='{c}'></i><div><b>{t}</b><span>{d}</span></div></li>" for c, t, d in legend)
     body = f"""
 <div class=stage>
   <div class=grid></div>
-  <div class="window" style="left:36px;top:36px">{shot("live", 0, 0, 1000, 976, 0.5)}</div>
+  <div class="window" style="left:36px;top:36px">{shot("live", 0, 0, 1000, 1010, 0.5)}</div>
   <div class=col>
-    <div class=eyebrow>Live, at 800 Hz</div>
+    <div class="eyebrow cyan">Live, at 800 Hz</div>
     <ul>{items}</ul>
     <div class=modes>
       <div class=mode><b>Active</b><span>runs your action</span></div>
@@ -259,7 +258,7 @@ li span { display:block; font-size:12.5px; color:var(--muted); margin-top:2px; }
 
 
 def calibrate(work):
-    w, h = 880, 440
+    w, h = 880, 580
     steps = [
         "Everyday desk activity: typing, leaning, moving things",
         "Leg and table movement",
@@ -271,19 +270,19 @@ def calibrate(work):
     body = f"""
 <div class=stage>
   <div class=grid></div>
-  <div class="window" style="left:36px;top:36px">{shot("calibrate", 0, 0, 1000, 736, 0.5)}</div>
+  <div class="window" style="left:36px;top:36px">{shot("calibrate", 0, 0, 1000, 1010, 0.5)}</div>
   <div class=col>
-    <div class=eyebrow>About two minutes</div>
+    <div class="eyebrow cyan">About two minutes</div>
     <ol>{items}</ol>
     <p>Only a profile that passes the check is applied. Nothing leaves your Mac.</p>
   </div>
 </div>"""
     css = """
-.col { position:absolute; left:576px; top:60px; width:270px; }
+.col { position:absolute; left:576px; top:118px; width:270px; }
 ol { list-style:none; margin-top:18px; }
 li { display:flex; gap:12px; padding:10px 0; border-top:1px solid rgba(234,242,248,.09); font-size:13.5px; }
 li:last-child { border-bottom:1px solid rgba(234,242,248,.09); }
-.n { flex:none; width:16px; font:600 12px ui-monospace, "SF Mono", Menlo, monospace; color:var(--cyan); padding-top:1px; }
+.n { flex:none; width:16px; font:700 12px -apple-system, system-ui; color:var(--cyan); padding-top:1px; }
 .col p { margin-top:16px; font-size:12.5px; color:var(--muted); }
 """
     capture("calibrate", body, w, h, work, css)
