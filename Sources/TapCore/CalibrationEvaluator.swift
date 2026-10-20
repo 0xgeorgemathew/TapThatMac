@@ -32,7 +32,9 @@ public enum CalibrationEvaluator {
         var settings = settings
         // A keyboard veto must not conceal a sensor false positive in negative examples.
         settings.suppressTyping = false
-        let replay = try RecordingReplay.evaluate(samples: trial.samples, keyTimes: [], settings: settings)
+        // Score with the live app's pair hold so calibration sees what it will.
+        let replay = try RecordingReplay.evaluate(samples: trial.samples, keyTimes: [], settings: settings,
+                                                  burstGuard: KnockPolicy.pairBurstGuard)
         let expected = trial.step.activity.expectedContacts
         let inWindow = replay.knockTimes.filter { time in
             guard expected > 0, let start = trial.cueTime, let end = trial.responseEnd else { return false }
@@ -59,14 +61,19 @@ public enum CalibrationEvaluator {
         // profile that still preserves every independently labelled contact. Keep
         // this list deliberately small: a short session cannot justify a broad grid.
         let floors = [0.07, 0.05, 0.035, 0.025, 0.02, 0.0175, 0.014, 0.011, 0.008, 0.006, 0.005, 0.004, 0.003, 0.002]
+        // Rise rates are per-sample slopes. This sensor's output rises over 8-12
+        // samples, so real contacts measure ~1-2 g/s (median 1.25 envelope, 1.1
+        // impulse across 79 recorded taps). Gates of 4-12 g/s were unreachable;
+        // the softer tail lets more sessions fit, and verification on fresh
+        // recordings still has to pass before a profile is applied.
         let shapes = [
-            (maximumDuration: 0.022, envelopeRise: 8.0, impulseRise: 12.0),
-            (maximumDuration: 0.028, envelopeRise: 8.0, impulseRise: 12.0),
-            (maximumDuration: 0.028, envelopeRise: 4.0, impulseRise: 8.0),
-            (maximumDuration: 0.035, envelopeRise: 4.0, impulseRise: 8.0),
             (maximumDuration: 0.035, envelopeRise: 2.0, impulseRise: 5.0),
+            (maximumDuration: 0.035, envelopeRise: 2.0, impulseRise: 2.0),
             (maximumDuration: 0.035, envelopeRise: 1.0, impulseRise: 3.0),
-            (maximumDuration: KnockPolicy.defaultMaximumPulseDuration, envelopeRise: 1.0, impulseRise: 3.0)
+            (maximumDuration: 0.035, envelopeRise: 1.0, impulseRise: 1.5),
+            (maximumDuration: KnockPolicy.defaultMaximumPulseDuration, envelopeRise: 1.0, impulseRise: 3.0),
+            (maximumDuration: KnockPolicy.defaultMaximumPulseDuration, envelopeRise: 1.0, impulseRise: 1.5),
+            (maximumDuration: KnockPolicy.defaultMaximumPulseDuration, envelopeRise: 0.75, impulseRise: 1.0)
         ]
         let tapIntervals = [0.45, 0.55, 0.7]
         for floor in floors {

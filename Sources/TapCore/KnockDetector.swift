@@ -111,7 +111,7 @@ private struct PulseDetector {
         }
         if feature < threshold * 0.4 {
             if quietSince == nil { quietSince = sample.time }
-            if sample.time - quietSince! >= 0.005 { latched = false }
+            if sample.time - quietSince! >= KnockPolicy.rearmQuietDuration { latched = false }
         } else { quietSince = nil }
 
         if let pending = candidate {

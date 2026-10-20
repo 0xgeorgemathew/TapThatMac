@@ -18,7 +18,8 @@ public enum ReplayError: Error, LocalizedError {
 public enum RecordingReplay {
     // Runs detector + gesture routing only. Never imports AppKit or sends actions.
     // Fixed 50 ms delivery ticks reproduce the app's 40 ms typing grace period.
-    public static func evaluate(samples: [AccelerationSample], keyTimes: [Double], settings: DetectorSettings, recognizesTriples: Bool = false) throws -> ReplayResult {
+    public static func evaluate(samples: [AccelerationSample], keyTimes: [Double], settings: DetectorSettings, recognizesTriples: Bool = false,
+                                burstGuard: Double = 0) throws -> ReplayResult {
         guard !samples.isEmpty, samples.count <= 100_000,
               samples.last!.time - samples.first!.time <= 60 else { throw ReplayError.invalidSamples }
         var previous = -Double.infinity
@@ -34,7 +35,7 @@ public enum RecordingReplay {
         }
         var detector = KnockDetector(); detector.settings = settings
         var router = GestureRouter(recognizesTriples: recognizesTriples,
-            maximumInterval: settings.maximumTapInterval)
+            maximumInterval: settings.maximumTapInterval, burstGuard: burstGuard)
         var pending: [Double] = []
         var knocks: [Double] = []
         var doubles: [Double] = []

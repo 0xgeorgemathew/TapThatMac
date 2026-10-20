@@ -9,12 +9,18 @@ public struct GestureRouter {
     public let maximumInterval: Double
     private let tripleInterval: Double
     private let recognizesTriples: Bool
+    /// When non-zero, a pair is held this long and cancelled as `.ambiguous`
+    /// if another contact arrives (see `KnockPolicy.pairBurstGuard`).
+    private let burstGuard: Double
     public init(recognizesTriples: Bool = false, tripleInterval: Double = 0.45,
-                maximumInterval: Double = 0.45) {
+                maximumInterval: Double = 0.45, burstGuard: Double = 0) {
         self.recognizesTriples = recognizesTriples
         self.tripleInterval = min(0.45, max(0.2, tripleInterval))
         self.maximumInterval = min(0.8, max(0.3, maximumInterval))
+        self.burstGuard = min(0.3, max(0, burstGuard))
     }
+    private var holdsPairs: Bool { recognizesTriples || burstGuard > 0 }
+    private var pairHold: Double { recognizesTriples ? tripleInterval : burstGuard }
     // The detector already rejects impact echoes. Double-only routing needs only
     // the minimum inter-tap gap, not another 350 ms blind period after a pair.
     private var recoveryInterval: Double { recognizesTriples ? 0.35 : minimumInterval }
@@ -39,7 +45,7 @@ public struct GestureRouter {
         switch state {
         case .firstKnockPending(let first) where time - first > maximumInterval:
             state = .idle; return .single
-        case .secondKnockPending(let second) where time - second > tripleInterval:
+        case .secondKnockPending(let second) where time - second > pairHold:
             state = .cooldown(until: time + recoveryInterval); return .double
         case .cooldown(let until) where time >= until: state = .idle
         default: break
@@ -56,7 +62,7 @@ public struct GestureRouter {
             // A short vibration echo must not cancel the first knock and
             // swallow the real second knock in a cooldown.
             guard time - first >= minimumInterval else { return events }
-            if recognizesTriples { state = .secondKnockPending(time) }
+            if holdsPairs { state = .secondKnockPending(time) }
             else {
                 state = .cooldown(until: time + recoveryInterval)
                 events.append(.double)
@@ -64,7 +70,7 @@ public struct GestureRouter {
         case .secondKnockPending(let second):
             guard time - second >= minimumInterval else { return events }
             state = .cooldown(until: time + recoveryInterval)
-            events.append(.triple)
+            events.append(recognizesTriples ? .triple : .ambiguous)
         case .cooldown: break
         }
         return events

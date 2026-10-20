@@ -80,6 +80,14 @@ public enum KnockPolicy {
     public static let burstContactLimit = 4
     public static let burstIgnoreDuration = 0.7
     public static let typingQuietDuration = 0.5
+    /// Quiet time before a detector path re-arms. It must outlast half a period
+    /// of low-frequency desk or chassis ringing (12-25 Hz), or the ring's zero
+    /// crossings re-arm the path and its next half-cycle reads as a second tap.
+    public static let rearmQuietDuration = 0.02
+    /// How long a recognized pair is held before it fires. A third contact in
+    /// that time makes the sequence a burst (a bouncing pen, drumming fingers)
+    /// rather than a double-tap, so nothing runs.
+    public static let pairBurstGuard = 0.15
 
     public static func typingBlocks(at time: Double, lastKeyTime: Double?) -> Bool {
         guard let key = lastKeyTime else { return false }
