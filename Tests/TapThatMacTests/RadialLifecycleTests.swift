@@ -1,7 +1,7 @@
 import AppKit
 import XCTest
 import TapCore
-@testable import TapThatX
+@testable import TapThatMac
 
 @MainActor
 final class RadialLifecycleTests: XCTestCase {

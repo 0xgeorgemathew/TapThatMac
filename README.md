@@ -1,6 +1,6 @@
-# TapThatX
+# Tap That Mac
 
-<img src="docs/assets/tapthatx-app-icon.png" width="96" alt="TapThatX icon">
+<img src="docs/assets/tapthatmac-app-icon.png" width="96" alt="Tap That Mac icon">
 
 A native macOS app that turns deliberate double taps and knocks into actions. Its main window stays available from the Dock while recognition follows the selected operating mode. Built with Swift, SwiftUI and AppKit; no third-party package dependencies.
 
@@ -27,7 +27,7 @@ Open `Package.swift` in Xcode for editing and debugging. Use the bundled app for
 
 ```sh
 bash scripts/build-app.sh
-open dist/TapThatX.app
+open "dist/Tap That Mac.app"
 ```
 
 Create `scripts/signing.env` (git-ignored) with your identity and team, and the build picks it up:
@@ -37,7 +37,7 @@ SIGNING_IDENTITY='Apple Development: Your Name (CERTIFICATE_ID)'
 TEAM_ID='YOURTEAMID'
 ```
 
-Explicit environment variables still override the file. Use a consistent signing identity and installation path to retain macOS permission grants. Supply your own certificate and team. Omitting them produces an ad-hoc development bundle that cannot use the signed helper. After a successful build the script replaces `/Applications/TapThatX.app` with the fresh bundle; set `SKIP_APP_INSTALL=1` to skip that install.
+Explicit environment variables still override the file. Use a consistent signing identity and installation path to retain macOS permission grants. Supply your own certificate and team. Omitting them produces an ad-hoc development bundle that cannot use the signed helper. After a successful build the script replaces `/Applications/Tap That Mac.app` with the fresh bundle; set `SKIP_APP_INSTALL=1` to skip that install.
 
 See [Contributing](CONTRIBUTING.md) for the development loop and [distribution](docs/DISTRIBUTION.md) for packaging.
 
@@ -49,7 +49,7 @@ The Live view gives permission guidance when access is missing. Accessibility en
 2. Watch the Live graph while tapping twice. Opening, closing, minimizing, or focusing the window does not change the selected mode.
 3. In **Actions**, choose the double-tap behavior. To use the ring, double-tap to open, tap to move, and double-tap to choose.
 
-The app uses 800 Hz for normal operation. CLI and test overrides remain available for development, including the existing restriction that rates below 50 Hz cannot execute actions. Motion capture, replay, and diagnostic export primitives remain available to development tools; TapThatX does not expose a recordings screen.
+The app uses 800 Hz for normal operation. CLI and test overrides remain available for development, including the existing restriction that rates below 50 Hz cannot execute actions. Motion capture, replay, and diagnostic export primitives remain available to development tools; Tap That Mac does not expose a recordings screen.
 
 Reliable desk detection, left/right classification, broad hardware coverage and significant whole-app CPU savings at lower rates are not established. The graph displays motion, not proof that every peak qualifies as a gesture.
 
@@ -61,14 +61,14 @@ Calibration takes about two minutes. It records everyday desk activity and leg/t
 
 The live graph shows the broad motion envelope in cyan and the light-tap impulse in violet, with their separate gates. The ring acknowledges a pending tap while waiting to distinguish a single from a double. The detector accepts configured floors down to 0.002 g, preserves fast 120–130 ms pairs in generated tests, and waits for pending pulse confirmation before expiring a pair.
 
-Sessions are saved locally under `~/Library/Application Support/TapThatX/Calibration/` with unique filenames and per-window checkpoints. Nothing is uploaded. Generated regression tests and short calibration do not establish real-world desk reliability. See the [design and limits](docs/DETECTION-CALIBRATION.md) and [CNN reassessment](docs/CNN-REASSESSMENT.md).
+Sessions are saved locally under `~/Library/Application Support/Tap That Mac/Calibration/` with unique filenames and per-window checkpoints. Previous local settings and calibration archives are preserved during the rename; see [upgrade details](docs/DISTRIBUTION.md#upgrading-from-the-previous-name). Nothing is uploaded. Generated regression tests and short calibration do not establish real-world desk reliability. See the [design and limits](docs/DETECTION-CALIBRATION.md) and [CNN reassessment](docs/CNN-REASSESSMENT.md).
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
 | `Sources/TapCore` | Sensor decoding, buffered input, pulse detection, gesture routing, replay and shared models |
-| `Sources/TapThatX` | macOS app, Live and Actions views, graph, command ring and action execution |
+| `Sources/TapThatMac` | macOS app, Live and Actions views, graph, command ring and action execution |
 | `Sources/TapSensorHelper` | Authenticated sensor helper |
 | `Sources/SensorProbe` | Read-only hardware diagnostic executable |
 | `Sources/ReplayCaptures` | Labeled recording replay CLI |

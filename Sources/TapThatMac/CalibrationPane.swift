@@ -129,10 +129,16 @@ struct CalibrationPane: View {
     @ViewBuilder private var statusIndicator: some View {
         if calibration.stage == .review {
             if calibration.reviewMatchesExpectedGesture {
-                Label("Captured", systemImage: "checkmark")
-                    .font(.headline)
-                    .foregroundStyle(ReactorTheme.accent)
-                    .transition(.scale.combined(with: .opacity))
+                HStack(spacing: 12) {
+                    Label("Captured", systemImage: "checkmark")
+                        .font(.headline)
+                        .foregroundStyle(ReactorTheme.accent)
+                        .transition(.scale.combined(with: .opacity))
+                    if calibration.canRetrySave {
+                        Button("Retry save") { calibration.retrySave() }
+                            .buttonStyle(.reactorButtonCompact(prominent: true))
+                    }
+                }
             } else {
                 HStack(spacing: 12) {
                     Text(calibration.review?.quality.issues.first ?? "The expected contacts were not captured. Try again.").foregroundStyle(.secondary)

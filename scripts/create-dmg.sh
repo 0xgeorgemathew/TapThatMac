@@ -2,8 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-if [[ ! -d "dist/TapThatX.app" ]]; then
-  echo "Building dist/TapThatX.app first..."
+if [[ ! -d "dist/Tap That Mac.app" ]]; then
+  echo "Building dist/Tap That Mac.app first..."
   bash scripts/build-app.sh
 fi
 
@@ -13,14 +13,14 @@ trap 'rm -rf "$dmg_temp_dir"' EXIT
 dmg_mount_point="$(mktemp -d dist/.dmg-mount.XXXXXX)"
 trap 'rm -rf "$dmg_temp_dir" "$dmg_mount_point"' EXIT
 
-dmg_name="TapThatX"
-dmg_final="dist/TapThatX.dmg"
+dmg_name="Tap That Mac"
+dmg_final="dist/tapthatmac.dmg"
 dmg_sparse="$dmg_temp_dir/temp.sparseimage"
 
 echo "Staging DMG contents..."
 stage="$dmg_temp_dir/stage"
 mkdir -p "$stage/.background"
-cp -R dist/TapThatX.app "$stage/TapThatX.app"
+cp -R "dist/Tap That Mac.app" "$stage/Tap That Mac.app"
 ln -s /Applications "$stage/Applications"
 cp "Packaging/Start Here.txt" "$stage/Start Here.txt"
 
@@ -61,7 +61,7 @@ tell application "Finder"
     if exists file ".background:background.png" then
       set background picture of viewOptions to file ".background:background.png"
     end if
-    set position of item "TapThatX.app" of container window to {180, 190}
+    set position of item "Tap That Mac.app" of container window to {180, 190}
     set position of item "Applications" of container window to {480, 190}
     set position of item "Start Here.txt" of container window to {330, 310}
     close

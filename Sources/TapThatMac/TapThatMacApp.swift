@@ -3,12 +3,15 @@ import AppKit
 import TapCore
 
 @main
-struct TapThatXApp: App {
+struct TapThatMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @StateObject private var model = AppModel()
+    @StateObject private var model: AppModel = {
+        AppIdentityMigration.run()
+        return AppModel()
+    }()
 
     var body: some Scene {
-        Window("TapThatX", id: "main") {
+        Window("Tap That Mac", id: "main") {
             SetupView(model: model)
                 .onAppear { delegate.model = model }
         }

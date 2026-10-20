@@ -60,7 +60,7 @@ public enum RecordingReplay {
             let ready = pending.filter { time - $0 >= 0.04 }
             pending.removeAll { time - $0 >= 0.04 }
             for impact in ready {
-                guard !settings.suppressTyping || lastKey.map({ abs(impact - $0) > 0.18 }) != false else { continue }
+                guard !settings.suppressTyping || !KnockPolicy.typingBlocks(at: impact, lastKeyTime: lastKey) else { continue }
                 knocks.append(impact)
                 for event in router.knock(at: impact) {
                     record(event, at: impact)

@@ -68,7 +68,7 @@ public final class BufferedSensorReader {
                 reader.stop()
                 CFRunLoopRemoveSource(loop, keepAlive, .commonModes)
             }
-            thread.name = "TapThatX sensor"
+            thread.name = "Tap That Mac sensor"
             thread.qualityOfService = .utility
             thread.start(); ready.wait()
             loop = workerLoop; reader = workerReader

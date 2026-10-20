@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="description" content="Interactive before/after comparison of the TapThatX settings window shell: current segmented window versus the proposed compact-chrome sidebar window.">
-<title>TapThatX | Settings window — before / after</title>
+<meta name="description" content="Interactive before/after comparison of the Tap That Mac settings window shell: current segmented window versus the proposed compact-chrome sidebar window.">
+<title>Tap That Mac | Settings window — before / after</title>
 <style>
 :root{--bg:#f6f8f7;--surface:#fff;--ink:#182720;--muted:#53635b;--line:#d3ddd7;--accent:#176b50;--soft:#e5f1eb;--radius:14px;color-scheme:light}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#131c18;--surface:#1b2721;--ink:#edf3ef;--muted:#acbdb1;--line:#3b4f43;--accent:#7bd7af;--soft:#233e31;color-scheme:dark}}
@@ -179,7 +179,7 @@ footer{padding:30px 0 48px;color:var(--muted);font-size:13px}
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar"><div class="shell">
-  <a class="brand" href="#main"><span class="glyph">⌁</span>TapThatX <span style="font-weight:400;color:var(--muted)">/ Settings window</span></a>
+  <a class="brand" href="#main"><span class="glyph">⌁</span>Tap That Mac <span style="font-weight:400;color:var(--muted)">/ Settings window</span></a>
   <nav aria-label="Document"><a href="#compare">Compare</a><a href="#mapping">Mapping</a><a href="#decisions">Decisions</a><a href="#consult">Consult</a><button id="theme" aria-label="Switch color theme" style="border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 12px;font-size:12.5px;min-height:36px">Appearance</button></nav>
 </div></header>
 
@@ -194,7 +194,7 @@ footer{padding:30px 0 48px;color:var(--muted);font-size:13px}
   <div class="hero-side">
     <strong>Scope: the window shell only.</strong><br>
     Navigation structure, layout, sizing and chrome. The command ring, the approval companion panel, sensor detection and the ChatGPT adapter are documented elsewhere and deliberately excluded.
-    <p style="margin-top:12px">Grounded in <code>Sources/TapThatX/SetupView.swift</code>, <code>TapThatXApp.swift</code>, <code>PermissionSetupView.swift</code>, the ChatGPT-mode proposal of 12 September, and an Astra design consult of 14 September 2026.</p>
+    <p style="margin-top:12px">Grounded in <code>Sources/TapThatMac/SetupView.swift</code>, <code>TapThatMacApp.swift</code>, <code>PermissionSetupView.swift</code>, the ChatGPT-mode proposal of 12 September, and an Astra design consult of 14 September 2026.</p>
   </div>
 </section>
 
@@ -262,10 +262,10 @@ footer{padding:30px 0 48px;color:var(--muted);font-size:13px}
 
         <!-- ============ VIEW 1: CURRENT ============ -->
         <div class="wf" id="win-current" data-view-window="current" role="tabpanel" aria-label="Current window">
-          <div class="wf-bar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="wf-title">TapThatX · Setup &amp; Diagnostics</span></div>
+          <div class="wf-bar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="wf-title">Tap That Mac · Setup &amp; Diagnostics</span></div>
           <div class="bighead">
             <span class="appicon" aria-hidden="true">⌁</span>
-            <div><h4>TapThatX</h4><span class="tag">Make a small tap count.</span></div>
+            <div><h4>Tap That Mac</h4><span class="tag">Make a small tap count.</span></div>
             <div style="margin-left:auto" class="wf-switch"><span>Pause</span><button class="track" data-pause aria-pressed="false" aria-label="Pause recognition"></button></div>
           </div>
           <div class="wf-tabs" role="tablist" aria-label="Settings section" data-tabs="current">
@@ -278,12 +278,12 @@ footer{padding:30px 0 48px;color:var(--muted);font-size:13px}
           <div class="wf-body rows"><div class="wf-content" data-content="current">
             <div data-pane-box="permissions" hidden><section>
               <h3>A small setup. Then just tap.</h3>
-              <p class="sub">Keep TapThatX in Applications before granting access. Approve each permission in System Settings, then return here. Actions stay paused while this window is open.</p>
+              <p class="sub">Keep Tap That Mac in Applications before granting access. Approve each permission in System Settings, then return here. Actions stay paused while this window is open.</p>
               <div class="card"><div class="row"><span class="lbl">Accessibility</span><span class="ok" data-perm-ok hidden>Allowed</span><span class="miss" data-perm-miss>Needs access</span></div><p class="hint">Lets your chosen gestures lock the Mac, control media and activate app controls.</p><button class="wf-btn" data-perm-btn>Allow Accessibility…</button></div>
               <div class="card"><div class="row"><span class="lbl">Input Monitoring</span><span class="ok">Allowed</span></div><p class="hint">Helps ignore vibrations while you type. Key timing only; never records what you type.</p></div>
               <p class="hint">macOS requires you to switch these permissions on yourself.</p>
               <button class="wf-btn">Check permissions again</button>
-              <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">Installing a shared build</summary><p class="hint" style="margin-top:8px">Copy TapThatX to Applications. If macOS blocks its first launch, try Privacy &amp; Security → Open Anyway…</p></details>
+              <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">Installing a shared build</summary><p class="hint" style="margin-top:8px">Copy Tap That Mac to Applications. If macOS blocks its first launch, try Privacy &amp; Security → Open Anyway…</p></details>
             </section></div>
             <div data-pane-box="tuning"><section>
               <h3>Find your tap</h3>
@@ -318,7 +318,7 @@ footer{padding:30px 0 48px;color:var(--muted);font-size:13px}
                 <div class="row"><span class="lbl">Desk double taps<br><small style="font-weight:400;color:#5b6a63">Calibration • 12,000 samples</small></span><span class="mono">1 intended</span></div>
                 <div class="row"><span class="lbl">Quiet interval<br><small style="font-weight:400;color:#5b6a63">Calibration • 12,000 samples</small></span><span class="mono">0 intended</span></div>
               </div>
-              <p class="hint">Saved locally in Library/Application Support/TapThatX/. Saving replaces the prior dataset. No characters or uploads.</p>
+              <p class="hint">Saved locally in Library/Application Support/Tap That Mac/. Saving replaces the prior dataset. No characters or uploads.</p>
             </section></div>
             <div data-pane-box="advanced" hidden><section>
               <h3>Connection &amp; diagnostics</h3>
@@ -336,7 +336,7 @@ footer{padding:30px 0 48px;color:var(--muted);font-size:13px}
 
         <!-- ============ VIEW 2: COMPACT + SEGMENTS ============ -->
         <div class="wf" id="win-segments" data-view-window="segments" role="tabpanel" aria-label="Compact chrome with segmented tabs" hidden>
-          <div class="wf-bar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="wf-title">TapThatX Settings</span></div>
+          <div class="wf-bar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="wf-title">Tap That Mac Settings</span></div>
           <div class="wf-toolbar"><span class="tb-title"></span><span class="wf-switch"><span>Pause recognition</span><button class="track" data-pause aria-pressed="false" aria-label="Pause recognition"></button></span></div>
           <div class="wf-tabs" role="tablist" aria-label="Settings section" data-tabs="segments">
             <button role="tab" data-pane="permissions">Permissions</button>
@@ -385,11 +385,11 @@ footer{padding:30px 0 48px;color:var(--muted);font-size:13px}
 
         <!-- ============ VIEW 3: COMPACT + SIDEBAR ============ -->
         <div class="wf" id="win-sidebar" data-view-window="sidebar" role="tabpanel" aria-label="Compact chrome with sidebar" hidden>
-          <div class="wf-bar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="wf-title">TapThatX Settings</span></div>
+          <div class="wf-bar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="wf-title">Tap That Mac Settings</span></div>
           <div class="wf-toolbar"><span class="tb-title"></span><span class="wf-switch"><span>Pause recognition</span><button class="track" data-pause aria-pressed="false" aria-label="Pause recognition"></button></span></div>
           <div class="wf-body wf-split">
             <nav class="wf-side" aria-label="Settings areas">
-              <span class="side-label">TapThatX</span>
+              <span class="side-label">Tap That Mac</span>
               <button data-area="chatgpt" aria-current="false"><span aria-hidden="true">✦</span>ChatGPT</button>
               <button data-area="connection" aria-current="true"><span aria-hidden="true">⌁</span>Connection <span class="badge" data-side-badge hidden>Needs access</span></button>
               <button data-area="tapsetup" aria-current="false"><span aria-hidden="true">〜</span>Tap setup</button>
@@ -507,7 +507,7 @@ footer{padding:30px 0 48px;color:var(--muted);font-size:13px}
     <div>
       <h3>Window chrome</h3>
       <ul class="plain">
-        <li><strong>Drop the large header.</strong> App icon, title and tagline consume ~90 pt of height on every page. The native title “TapThatX Settings” and standard traffic lights replace them.</li>
+        <li><strong>Drop the large header.</strong> App icon, title and tagline consume ~90 pt of height on every page. The native title “Tap That Mac Settings” and standard traffic lights replace them.</li>
         <li><strong>Pause recognition moves to the toolbar's trailing edge</strong> as a labeled, persistent toggle. Manual pause stays distinct from “actions paused while Settings is open”.</li>
         <li><strong>Keep a full-width pinned footer:</strong> status and latest acknowledgment left, <em>Enable &amp; close</em> right, with an explicit reason whenever the button is unavailable. The footer grows for long messages instead of truncating them.</li>
         <li><strong>Keep the button's wording.</strong> It clears calibration mode, enables actions and closes the window — more than dismissal (<code>AppModel.swift:117</code>). All current disabled conditions carry over: recording, manual pause, simulated input, sampling below 50 Hz. Ordinary window closing stays different from Enable &amp; close.</li>
@@ -584,9 +584,9 @@ footer{padding:30px 0 48px;color:var(--muted);font-size:13px}
     <div>
       <h3>Where this comes from</h3>
       <ul class="plain">
-        <li>Current shell, footer states and disabled conditions: <code>Sources/TapThatX/SetupView.swift:11</code>, <code>:52</code>, <code>:55</code>; window default size <code>TapThatXApp.swift:17</code>; closing behavior <code>AppModel.swift:117</code>; permission cards <code>PermissionSetupView.swift:9</code>.</li>
-        <li>Sidebar direction, four areas and 140–160 pt target: <a href="tapthatx-chatgpt-mode-design.html">ChatGPT-mode proposal</a> (12 September 2026). ChatGPT pane content mirrors its wireframe.</li>
-        <li>“Keep segments as baseline; prototype the sidebar at 720 × 640”: <a href="tapthatx-unified-design-documentation.html">unified design documentation</a>.</li>
+        <li>Current shell, footer states and disabled conditions: <code>Sources/TapThatMac/SetupView.swift:11</code>, <code>:52</code>, <code>:55</code>; window default size <code>TapThatMacApp.swift:17</code>; closing behavior <code>AppModel.swift:117</code>; permission cards <code>PermissionSetupView.swift:9</code>.</li>
+        <li>Sidebar direction, four areas and 140–160 pt target: <a href="tapthatmac-chatgpt-mode-design.html">ChatGPT-mode proposal</a> (12 September 2026). ChatGPT pane content mirrors its wireframe.</li>
+        <li>“Keep segments as baseline; prototype the sidebar at 720 × 640”: <a href="tapthatmac-unified-design-documentation.html">unified design documentation</a>.</li>
         <li>Chrome, mapping and sizing decisions above: Astra consult, 14 September 2026 (linked in full).</li>
       </ul>
     </div>
@@ -603,7 +603,7 @@ footer{padding:30px 0 48px;color:var(--muted);font-size:13px}
 </section>
 
 </main>
-<footer><div class="shell">TapThatX · settings window before/after · interactive design documentation · 14 September 2026. The Astra consult record stays local under <code>.zcode/consults/</code>.</div></footer>
+<footer><div class="shell">Tap That Mac · settings window before/after · interactive design documentation · 14 September 2026. The Astra consult record stays local under <code>.zcode/consults/</code>.</div></footer>
 
 <script>
 'use strict';

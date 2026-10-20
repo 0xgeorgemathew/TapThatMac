@@ -1,6 +1,6 @@
 # Packaging and distribution
 
-Build an arm64 `.app` with `bash scripts/build-app.sh`. Signing reads `SIGNING_IDENTITY` and `TEAM_ID` from the environment, falling back to the git-ignored `scripts/signing.env`; the certificate's actual team must match. The build stages and verifies the bundle before replacing `dist/TapThatX.app`. Local development builds may fail distribution assessment because they are not notarized.
+Build an arm64 `.app` with `bash scripts/build-app.sh`. Signing reads `SIGNING_IDENTITY` and `TEAM_ID` from the environment, falling back to the git-ignored `scripts/signing.env`; the certificate's actual team must match. The build stages and verifies the bundle before replacing `dist/Tap That Mac.app`. Local development builds may fail distribution assessment because they are not notarized.
 
 Use a stable installation location before registering the sensor helper. Register/remove it through the app; building alone does not register it. The app and helper authenticate their exact identifiers and configured signing team. Never run the UI as root.
 
@@ -14,14 +14,20 @@ Then edit the ignored `scripts/signing.env` with the exact certificate name, Tea
 
 ```sh
 SIGNING_IDENTITY='Developer ID Application: Your Name (CERTIFICATE_ID)' \
-TEAM_ID='YOURTEAMID' NOTARY_PROFILE='tapthatx-notary' bash scripts/notarize.sh
+TEAM_ID='YOURTEAMID' NOTARY_PROFILE='tapthatmac-notary' bash scripts/notarize.sh
 bash scripts/create-dmg.sh
 ```
 
-Notarization submits the app to Apple, staples and verifies it, and produces `dist/TapThatX.zip`. The separate DMG script packages the current bundle with a drag-to-Applications layout; it does not notarize the DMG itself. Keep credentials in the environment/keychain. No signing identity or credential is stored in this repository or CI.
+Notarization submits the app to Apple, staples and verifies it, and produces `dist/tapthatmac.zip`. The separate DMG script packages the current bundle with a drag-to-Applications layout; it does not notarize the DMG itself. Keep credentials in the environment/keychain. No signing identity or credential is stored in this repository or CI.
 
 Before distribution, verify installation, permissions, helper lifecycle and physical detection on a second supported Mac. A successful build or replay does not establish those checks.
 
 ## Sharing a development build
 
 Use `SIGNING_IDENTITY=- bash scripts/build-app.sh`, then `bash scripts/create-dmg.sh` for an ad-hoc build. The DMG includes `Start Here.txt` with installation, per-app quarantine removal and manual permission instructions. Accessibility and Input Monitoring still require approval in System Settings. Ad-hoc builds cannot use the authenticated sensor helper.
+
+## Upgrading from the previous name
+
+Tap That Mac uses `com.tapthatmac.app` and the `com.tapthatmac.sensor` helper. macOS may require fresh Accessibility, Input Monitoring and Login Items approval. Before removing the previous app, use its Remove Helper control to unregister its daemon; the renamed app does not remove the old registered helper automatically.
+
+At launch, missing preferences are copied once from the legacy `com.tapthatx.app` domain. Existing new preferences take priority, including later cleared choices. Missing files from `~/Library/Application Support/TapThatX/` are copied into `~/Library/Application Support/Tap That Mac/`; originals and existing destination files are retained. New calibration and runtime files use the new folder. File-copy failures are logged and retried on the next launch.

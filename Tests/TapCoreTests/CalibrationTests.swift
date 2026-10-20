@@ -145,12 +145,17 @@ final class CalibrationTests: XCTestCase {
         XCTAssertFalse(try JSONDecoder().decode(CalibrationContext.self, from: oldData).includesSurfaceBumps)
     }
 
+    func testDefaultReleaseDurationIsValidForCalibration() throws {
+        let contact = trial(.init(.knock, .training))
+        XCTAssertTrue(try CalibrationEvaluator.score(contact, settings: DetectorSettings()).passed)
+    }
+
     func testOlderDetectorSettingsReceiveSafeShapeDefaults() throws {
         let data = try XCTUnwrap(#"{"sensitivity":2,"suppressTyping":false}"#.data(using: .utf8))
         let settings = try JSONDecoder().decode(DetectorSettings.self, from: data)
         XCTAssertEqual(settings.minimumRiseRate, 1)
         XCTAssertEqual(settings.impulseMinimumRiseRate, 3)
-        XCTAssertEqual(settings.maximumPulseDuration, 0.035)
+        XCTAssertEqual(settings.maximumPulseDuration, 0.08)
         XCTAssertEqual(settings.maximumTapInterval, 0.45)
         XCTAssertFalse(settings.suppressTyping)
     }

@@ -97,7 +97,7 @@ final class MotionGraphNSView: NSView {
     }
     // Fonts are cached because monospacedSystemFont was re-resolved on every
     // frame and a system font-resolution race during appearance changes crashed
-    // CoreText once in testing (TapThatX-2026-09-17-152424.ips).
+    // CoreText once in testing (TapThatMac-2026-09-17-152424.ips).
     private static let smallFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .medium)
     private static let labelFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
 

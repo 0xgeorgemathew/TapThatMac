@@ -13,7 +13,7 @@ final class HelperClient {
     private var pendingSince = 0.0
     private(set) var rate = 0.0
     private(set) var rejected = 0
-    static var service: SMAppService { .daemon(plistName: "com.tapthatx.sensor.plist") }
+    static var service: SMAppService { .daemon(plistName: "com.tapthatmac.sensor.plist") }
     static var status: String {
         switch service.status {
         case .enabled: return "Approved"
@@ -29,7 +29,7 @@ final class HelperClient {
         connect()
     }
     private func connect() {
-        guard let team = Bundle.main.object(forInfoDictionaryKey: "TapThatXTeamIdentifier") as? String,
+        guard let team = Bundle.main.object(forInfoDictionaryKey: "TapThatMacTeamIdentifier") as? String,
               let requirement = SensorIPC.requirement(identifier: SensorIPC.helperIdentifier, team: team) else {
             onStatus?("Helper unavailable in unsigned builds; signed packaging is required"); return
         }

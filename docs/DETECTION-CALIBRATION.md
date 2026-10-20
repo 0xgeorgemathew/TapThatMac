@@ -1,6 +1,6 @@
 # Desk detection and calibration
 
-TapThatX uses a deterministic pulse detector. The supported target is a Mac sitting on a desk: open, or closed while macOS is awake with an active external display. Light taps and knocks are both intentional inputs. Lap use and waking a sleeping Mac are outside this detector's scope. Lid angle alone cannot establish that a Mac is resting on a desk.
+Tap That Mac uses a deterministic pulse detector. The supported target is a Mac sitting on a desk: open, or closed while macOS is awake with an active external display. Light taps and knocks are both intentional inputs. Lap use and waking a sleeping Mac are outside this detector's scope. Lid angle alone cannot establish that a Mac is resting on a desk.
 
 ## Calibration contract
 
@@ -23,11 +23,13 @@ This flow learns to accept light taps AND knocks. It does not need to classify t
 
 The broad motion envelope and the short high-pass impulse path share pulse-shape checks and quiet rearming. The impulse path operates only below a configured floor of 0.0175 g. Its threshold can be below the broad motion floor, but it requires a sharper onset. Minimum configured amplitude is 0.002 g in both live settings and calibration. Contrast normalization respects that floor instead of imposing a hidden 0.0025 g minimum.
 
-Contacts from the two paths are coalesced for 110 ms. This keeps the existing 90–105 ms echo examples suppressed while permitting generated 120–130 ms pairs. It is a bounded heuristic, not proof that every desk's resonance has ended at 110 ms. Pulse duration, rise rate, adaptive background gates, and quiet rearming remain necessary. Generated ringing sweeps guard against counting one decaying impact twice.
+A candidate captures its onset feature magnitude once. It confirms only when a later feature falls to 40% or less of that original magnitude, within the configured pulse duration (80 ms by default, inclusive). Later larger peaks do not relax that release level. Existing saved duration overrides remain intact.
 
-Pairing uses contact onset times. The gesture clock waits for any pulse still awaiting confirmation or delivery before expiring a possible pair; the former fixed 40 ms allowance alone was shorter than the supported 50 ms confirmation duration. The same rule is used in replay and the live app.
+Contacts from the two paths are coalesced for 110 ms. After coalescing, confirmed contacts require at least 120 ms onset spacing. The fourth spaced confirmation with onsets within an inclusive 500 ms window is rejected and starts a 700 ms ignore period at confirmation time. The history clears on entry; suppressed contacts do not extend it. A new onset at expiry is allowed, while an onset during ignore cannot become valid by releasing after expiry. This keeps the existing 90–105 ms echo examples suppressed while permitting generated 120–130 ms pairs. It is a bounded heuristic, not proof that every desk's resonance has ended at 110 ms. Pulse duration, rise rate, adaptive background gates, and quiet rearming remain necessary. Generated ringing sweeps guard against counting one decaying impact twice.
 
-Inside the ring, a recognized first tap shows “Tap received” while awaiting a possible second tap. Selection still advances only when the pair window ends (450 ms by default, up to 700 ms after calibration). A double tap confirms the current selection. Advancing immediately would change which command that double tap selects. Keyboard-adjacent motion remains vetoed for 180 ms when typing suppression is enabled.
+Pairing uses contact onset times. The gesture clock waits for any pulse still awaiting confirmation or delivery before expiring a possible pair; the 40 ms delivery grace alone is shorter than the default 80 ms confirmation window. The same rule is used in replay and the live app.
+
+Inside the ring, a recognized first tap shows “Tap received” while awaiting a possible second tap. Selection still advances only when the pair window ends (450 ms by default, up to 700 ms after calibration). A double tap confirms the current selection. Advancing immediately would change which command that double tap selects. When typing suppression is enabled, candidate onset and confirmation must each be at least 500 ms after the last key. The exact 500 ms boundary is allowed; a key arriving during a candidate vetoes it. Live and replay delivery share this policy, retain the 40 ms delivery grace, and clear queued contacts and pairing state on a key.
 
 The fitter searches a bounded set of amplitude, rise-rate, pulse-duration and pair-window settings. It prefers the highest floor and strongest shape settings that preserve all training contacts and reject the training disturbances. Fresh verification tests that choice; no separation yields a failed calibration, not an accuracy claim.
 
@@ -37,7 +39,7 @@ Low-range detail uses the existing nonlinear scale and preserves brief peaks in 
 
 ## Persistence and replay
 
-Sessions are stored only in `~/Library/Application Support/TapThatX/Calibration/`. Unique files preserve raw XYZ samples, cue windows, quality information and settings. No characters, audio or network uploads are collected. Schema 5 / `desk-verified-profile-v5` records the new training/verification split.
+Sessions are stored only in `~/Library/Application Support/Tap That Mac/Calibration/`. Unique files preserve raw XYZ samples, cue windows, quality information and settings. No characters, audio or network uploads are collected. Schema 5 / `desk-verified-profile-v5` records the new training/verification split.
 
 `ReplayCaptures` understands the schema's actual step sequence. Older four-gesture sessions are training-only and cannot claim independent verification. Earlier extended sessions remain replayable when their frozen settings reproduce under the current detector. Algorithm changes can invalidate an older replay; that is reported rather than silently accepting it.
 

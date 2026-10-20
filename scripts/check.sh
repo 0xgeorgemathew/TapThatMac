@@ -6,4 +6,4 @@ swift build -c release
 for script in scripts/*.sh; do
   bash -n "$script"
 done
-plutil -lint Packaging/Info.plist Packaging/com.tapthatx.sensor.plist
+plutil -lint Packaging/Info.plist Packaging/com.tapthatmac.sensor.plist

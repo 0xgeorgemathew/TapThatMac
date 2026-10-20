@@ -70,6 +70,24 @@ public enum ReportDecoder {
     }
 }
 
+/// Shared contact policy for live detection and delayed replay/delivery.
+public enum KnockPolicy {
+    public static let releaseRatio = 0.4
+    public static let defaultMaximumPulseDuration = 0.08
+    public static let pathCoalescingInterval = 0.11
+    public static let minimumContactSpacing = 0.12
+    public static let burstWindow = 0.5
+    public static let burstContactLimit = 4
+    public static let burstIgnoreDuration = 0.7
+    public static let typingQuietDuration = 0.5
+
+    public static func typingBlocks(at time: Double, lastKeyTime: Double?) -> Bool {
+        guard let key = lastKeyTime else { return false }
+        // Future key markers also veto a queued contact; never use absolute age.
+        return time < key + typingQuietDuration
+    }
+}
+
 public struct DetectorSettings: Codable, Equatable {
     public static let minimumAmplitudeFloor = 0.002
     public static let maximumAmplitudeFloor = 0.07
@@ -83,7 +101,7 @@ public struct DetectorSettings: Codable, Equatable {
     /// Light contacts use a shorter high-pass path and need a sharper onset.
     public var impulseMinimumRiseRate: Double = 3
     /// Contacts that remain above their confirmation level longer than this are motion, not taps.
-    public var maximumPulseDuration: Double = 0.035
+    public var maximumPulseDuration: Double = KnockPolicy.defaultMaximumPulseDuration
     /// Longest gap between deliberate contacts in one double tap.
     public var maximumTapInterval: Double = 0.45
     public init() {}
@@ -99,7 +117,7 @@ public struct DetectorSettings: Codable, Equatable {
         suppressTyping = try values.decodeIfPresent(Bool.self, forKey: .suppressTyping) ?? true
         minimumRiseRate = try values.decodeIfPresent(Double.self, forKey: .minimumRiseRate) ?? 1
         impulseMinimumRiseRate = try values.decodeIfPresent(Double.self, forKey: .impulseMinimumRiseRate) ?? 3
-        maximumPulseDuration = try values.decodeIfPresent(Double.self, forKey: .maximumPulseDuration) ?? 0.035
+        maximumPulseDuration = try values.decodeIfPresent(Double.self, forKey: .maximumPulseDuration) ?? KnockPolicy.defaultMaximumPulseDuration
         maximumTapInterval = try values.decodeIfPresent(Double.self, forKey: .maximumTapInterval) ?? 0.45
     }
     public static func sensitivity(forAmplitudeFloor value: Double) -> Double {

@@ -1,5 +1,5 @@
 import XCTest
-@testable import TapThatX
+@testable import TapThatMac
 
 final class SensorRecoveryPolicyTests: XCTestCase {
     func testAccessFailuresSelectAutomaticHelperFallback() {

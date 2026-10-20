@@ -1,21 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-if [[ -z "${SIGNING_IDENTITY:-}" && -f scripts/signing.env ]]; then
-  source scripts/signing.env
-fi
+source scripts/signing-config.sh
+load_signing_config scripts/signing.env
 swift build -c release --arch arm64
 bin_dir="$(swift build -c release --arch arm64 --show-bin-path)"
 mkdir -p dist
-build_stage="$(mktemp -d dist/.tapthatx-build.XXXXXX)"
+build_stage="$(mktemp -d dist/.tapthatmac-build.XXXXXX)"
 trap 'rm -rf "$build_stage"' EXIT
-app="$build_stage/TapThatX.app"
+app="$build_stage/Tap That Mac.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Library/LaunchDaemons" "$app/Contents/Resources"
-cp "$bin_dir/TapThatX" "$app/Contents/MacOS/TapThatX"
+cp "$bin_dir/TapThatMac" "$app/Contents/MacOS/TapThatMac"
 cp "$bin_dir/TapSensorHelper" "$app/Contents/MacOS/TapSensorHelper"
 cp docs/SENSOR_REFERENCE_LICENSE.txt "$app/Contents/Resources/"
 cp Packaging/Info.plist "$app/Contents/Info.plist"
-cp Packaging/com.tapthatx.sensor.plist "$app/Contents/Library/LaunchDaemons/"
+cp Packaging/com.tapthatmac.sensor.plist "$app/Contents/Library/LaunchDaemons/"
 if [[ -f Packaging/AppIcon.icns ]]; then
   cp Packaging/AppIcon.icns "$app/Contents/Resources/"
 fi
@@ -26,9 +25,9 @@ identity="${SIGNING_IDENTITY:--}"
 if [[ "$identity" != "-" ]]; then
   : "${TEAM_ID:?Set TEAM_ID to the signing certificate team identifier}"
   [[ "$TEAM_ID" =~ ^[A-Z0-9]{10}$ ]] || { echo 'Invalid TEAM_ID' >&2; exit 1; }
-  /usr/libexec/PlistBuddy -c "Add :TapThatXTeamIdentifier string $TEAM_ID" "$app/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :TapThatMacTeamIdentifier string $TEAM_ID" "$app/Contents/Info.plist"
 fi
-codesign --force --options runtime --timestamp=none --sign "$identity" --identifier com.tapthatx.sensor.helper "$app/Contents/MacOS/TapSensorHelper"
+codesign --force --options runtime --timestamp=none --sign "$identity" --identifier com.tapthatmac.sensor.helper "$app/Contents/MacOS/TapSensorHelper"
 if [[ "$identity" != "-" ]]; then
   actual_team="$(codesign -dv "$app/Contents/MacOS/TapSensorHelper" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
   if [[ "$actual_team" != "$TEAM_ID" ]]; then
@@ -52,32 +51,32 @@ if [[ "$assessment_status" != "0" ]]; then
   echo 'Local development build. Distribution assessment was rejected; this does not establish whether a locally built app can launch.' >&2
 fi
 # Publish only after integrity and signing trust checks, preserving the previous build on failure.
-if [[ -d dist/TapThatX.app ]]; then
-  mv dist/TapThatX.app "$build_stage/previous.app"
+if [[ -d "dist/Tap That Mac.app" ]]; then
+  mv "dist/Tap That Mac.app" "$build_stage/previous.app"
 fi
-if ! mv "$app" dist/TapThatX.app; then
-  if [[ -d "$build_stage/previous.app" ]]; then mv "$build_stage/previous.app" dist/TapThatX.app; fi
+if ! mv "$app" "dist/Tap That Mac.app"; then
+  if [[ -d "$build_stage/previous.app" ]]; then mv "$build_stage/previous.app" "dist/Tap That Mac.app"; fi
   exit 1
 fi
-echo "Built dist/TapThatX.app (identity: $identity). Developer ID distribution requires scripts/notarize.sh."
+echo "Built dist/Tap That Mac.app (identity: $identity). Developer ID distribution requires scripts/notarize.sh."
 # Install over the app in /Applications so permission grants tied to the
 # signature and install path stay valid. ditto preserves the metadata cp may not.
 if [[ -n "${SKIP_APP_INSTALL:-}" && "${SKIP_APP_INSTALL}" != "0" ]]; then
   echo 'Skipping /Applications install (SKIP_APP_INSTALL is set).'
 else
-  osascript -e 'tell application "TapThatX" to quit' >/dev/null 2>&1 || true
+  osascript -e 'tell application "Tap That Mac" to quit' >/dev/null 2>&1 || true
   for _ in {1..20}; do
-    pgrep -x TapThatX >/dev/null || break
+    pgrep -x TapThatMac >/dev/null || break
     sleep 0.1
   done
-  pkill -x TapThatX || true
-  rm -rf /Applications/TapThatX.app
-  ditto dist/TapThatX.app /Applications/TapThatX.app
-  if ! cmp -s dist/TapThatX.app/Contents/MacOS/TapThatX /Applications/TapThatX.app/Contents/MacOS/TapThatX; then
-    echo 'Installed app binary differs from dist/TapThatX.app; install did not complete.' >&2
+  pkill -x TapThatMac || true
+  rm -rf "/Applications/Tap That Mac.app"
+  ditto "dist/Tap That Mac.app" "/Applications/Tap That Mac.app"
+  if ! cmp -s "dist/Tap That Mac.app/Contents/MacOS/TapThatMac" "/Applications/Tap That Mac.app/Contents/MacOS/TapThatMac"; then
+    echo 'Installed app binary differs from "dist/Tap That Mac.app"; install did not complete.' >&2
     exit 1
   fi
-  echo "Replaced /Applications/TapThatX.app (identity: $identity)."
+  echo "Replaced /Applications/Tap That Mac.app (identity: $identity)."
   # Relaunch the regular app and show its main window.
-  open /Applications/TapThatX.app
+  open "/Applications/Tap That Mac.app"
 fi

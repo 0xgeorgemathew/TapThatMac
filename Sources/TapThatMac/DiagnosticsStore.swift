@@ -71,7 +71,7 @@ final class DiagnosticsStore {
     func exportRecent(preset: Preset, settings: DetectorSettings, simulated: Bool, to url: URL) throws {
         let snapshot = recent.snapshot()
         guard let first = snapshot.samples.first, let last = snapshot.samples.last else {
-            throw NSError(domain: "TapThatX", code: 1, userInfo: [NSLocalizedDescriptionKey: "No recent motion to save yet."])
+            throw NSError(domain: "Tap That Mac", code: 1, userInfo: [NSLocalizedDescriptionKey: "No recent motion to save yet."])
         }
         let capture = Capture(label: "Unlabelled recent activity", purpose: "Diagnostic", simulated: simulated,
             started: first.time, duration: last.time - first.time, samples: snapshot.samples,

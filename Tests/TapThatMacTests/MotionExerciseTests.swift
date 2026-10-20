@@ -1,7 +1,7 @@
 import AppKit
 import XCTest
 import TapCore
-@testable import TapThatX
+@testable import TapThatMac
 
 /// Live motion harness. These tests drive the real centered panel on the real
 /// window server, so they run only when explicitly requested:

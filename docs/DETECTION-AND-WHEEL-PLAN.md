@@ -10,7 +10,7 @@ The wheel should move smoothly between selections. Reaching the final item and a
 
 ### Existing evidence and likely cause
 
-`Sources/TapThatX/RadialPanelController.swift` rotates a highlighted `Sector(index: 0)` by the selected command's normalized index angle. There are currently seven commands. The last-to-first change is approximately 308.57° → 0°; numeric interpolation can travel backward by 308.57° instead of forward by 51.43°. This is a code-based diagnosis; it has not been verified in a live recording during this planning task.
+`Sources/TapThatMac/RadialPanelController.swift` rotates a highlighted `Sector(index: 0)` by the selected command's normalized index angle. There are currently seven commands. The last-to-first change is approximately 308.57° → 0°; numeric interpolation can travel backward by 308.57° instead of forward by 51.43°. This is a code-based diagnosis; it has not been verified in a live recording during this planning task.
 
 `Command.advancing` already wraps logical selection correctly. Selection changes originate in keyboard/tap advancement, hover, pointer confirmation, and automatic action presentation. A broad selection-driven spring animates the view; automatic actions use delayed callbacks, and commit uses a separate press delay guarded by an opening token.
 
@@ -35,7 +35,7 @@ The wheel should move smoothly between selections. Reaching the final item and a
 ### Executable prompt 3 — wheel motion and wraparound
 
 ```text
-In /Users/george/Workspace/tapthatx, implement only section 3 of
+In this repository, implement only section 3 of
  docs/DETECTION-AND-WHEEL-PLAN.md. Follow AGENTS.md and preserve unrelated edits.
 Inspect RadialPanelController.swift, Command.advancing, AppModel ring routing,
 and existing tests. Verify current SwiftUI/AppKit animation APIs through

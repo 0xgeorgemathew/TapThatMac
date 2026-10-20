@@ -1,7 +1,7 @@
 import XCTest
 import AppKit
 import TapCore
-@testable import TapThatX
+@testable import TapThatMac
 
 final class CalibrationControllerTests: XCTestCase {
     private var directory: URL!
@@ -10,7 +10,7 @@ final class CalibrationControllerTests: XCTestCase {
     override func setUpWithError() throws {
         directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        suiteName = "TapThatXTests-\(UUID().uuidString)"
+        suiteName = "TapThatMacTests-\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suiteName)!
     }
     override func tearDownWithError() throws {
@@ -67,6 +67,7 @@ final class CalibrationControllerTests: XCTestCase {
         let c = controller(); c.record(at: 100)
         c.interrupt("Window hidden", at: 101)
         XCTAssertEqual(c.stage, .review); XCTAssertFalse(c.canConfirm)
+        XCTAssertFalse(c.canRetrySave)
         c.confirm(); XCTAssertEqual(c.completedCount, 0)
         XCTAssertTrue(c.cancel(at: 102)); XCTAssertFalse(c.blocksActions)
     }
@@ -87,6 +88,78 @@ final class CalibrationControllerTests: XCTestCase {
         c.confirm()
         XCTAssertEqual(c.stage, .review); XCTAssertEqual(c.completedCount, 0)
         XCTAssertNotNil(c.review); XCTAssertNotNil(c.saveError); XCTAssertTrue(c.blocksActions)
+    }
+
+    func testRetrySaveRetainsAndAcceptsTheCapturedRecordingExactlyOnce() throws {
+        let c = controller(); record(c)
+        let capturedID = try XCTUnwrap(c.review?.id)
+        XCTAssertFalse(c.canRetrySave)
+        try FileManager.default.removeItem(at: directory)
+        try Data().write(to: directory)
+        c.confirm()
+        XCTAssertTrue(c.canRetrySave)
+        XCTAssertEqual(c.review?.id, capturedID)
+        try FileManager.default.removeItem(at: directory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        c.retrySave()
+        XCTAssertEqual(c.stage, .ready)
+        XCTAssertEqual(c.completedCount, 1)
+        XCTAssertNil(c.review); XCTAssertNil(c.saveError)
+        XCTAssertFalse(c.canRetrySave)
+        c.retrySave()
+        let disk = try JSONDecoder().decode(CalibrationSession.self, from: Data(contentsOf: XCTUnwrap(c.archiveURL)))
+        XCTAssertEqual(disk.trials.count, 1)
+        XCTAssertEqual(disk.trials.first?.id, capturedID)
+        XCTAssertTrue(disk.trials.first?.confirmed == true)
+    }
+
+    @MainActor
+    func testOpeningAppliedCompletionPreparesFreshCalibrationWithoutRemovingArchive() throws {
+        let c = controller()
+        for index in CalibrationStep.sequence.indices {
+            record(c, at: 100 + Double(index) * 20); c.confirm()
+        }
+        let archive = try XCTUnwrap(c.archiveURL)
+        let saved = try Data(contentsOf: archive)
+        c.prepareForPresentation()
+        XCTAssertEqual(c.stage, .complete, "Completion must stay visible until application finishes")
+        c.markApplied()
+        // Restore the saved profile through the real model using isolated preferences.
+        let profile = CalibrationProfile(session: try XCTUnwrap(c.session), settings: try XCTUnwrap(c.candidateSettings))
+        defaults.set(try JSONEncoder().encode([profile]), forKey: "calibrationProfiles")
+        defaults.set(profile.id.uuidString, forKey: "activeCalibrationProfileID")
+        _ = NSApplication.shared
+        let model = AppModel(startServices: false, calibration: c, modeDefaults: defaults, settingsDefaults: defaults)
+        defer { model.shutdown() }
+        XCTAssertEqual(model.activeCalibrationProfile, profile)
+        let sensitivity = model.sensitivity
+        c.prepareForPresentation()
+        XCTAssertEqual(c.stage, .idle)
+        XCTAssertEqual(model.activeCalibrationProfile, profile)
+        XCTAssertEqual(model.calibrationProfiles, [profile])
+        XCTAssertEqual(model.sensitivity, sensitivity)
+        XCTAssertEqual(defaults.data(forKey: "calibrationProfiles"), try JSONEncoder().encode([profile]))
+        XCTAssertEqual(defaults.string(forKey: "activeCalibrationProfileID"), profile.id.uuidString)
+        XCTAssertNil(c.session); XCTAssertNil(c.review)
+        XCTAssertFalse(c.applied)
+        XCTAssertEqual(try Data(contentsOf: archive), saved)
+        c.begin(context: .init(surface: "Desk", placement: "Test", device: "Test", os: "Test",
+            input: "Test", requestedRate: 800, initialSettings: DetectorSettings()))
+        XCTAssertEqual(c.stage, .ready)
+        XCTAssertNotEqual(c.archiveURL, archive)
+        XCTAssertEqual(c.completedCount, 0)
+    }
+
+    func testOpeningUnfinishedCalibrationPreservesItsReviewAndCheckpoint() throws {
+        let c = controller(); record(c)
+        let review = try XCTUnwrap(c.review?.id)
+        let session = try XCTUnwrap(c.session?.id)
+        let archive = c.archiveURL
+        c.prepareForPresentation()
+        XCTAssertEqual(c.stage, .review)
+        XCTAssertEqual(c.review?.id, review)
+        XCTAssertEqual(c.session?.id, session)
+        XCTAssertEqual(c.archiveURL, archive)
     }
 
     @MainActor

@@ -21,7 +21,7 @@ final class CalibrationController: ObservableObject {
 
     init(directory: @escaping () throws -> URL = {
         try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
-            appropriateFor: nil, create: true).appendingPathComponent("TapThatX/Calibration", isDirectory: true)
+            appropriateFor: nil, create: true).appendingPathComponent("Tap That Mac/Calibration", isDirectory: true)
     }) { self.directory = directory }
 
     var blocksActions: Bool { [.ready, .recording, .review].contains(stage) }
@@ -49,6 +49,23 @@ final class CalibrationController: ObservableObject {
     }
     var floor: Double? { session?.candidateFloor }
     var candidateSettings: DetectorSettings? { session?.candidateSettings }
+
+    var canRetrySave: Bool { saveError != nil && reviewMatchesExpectedGesture }
+
+    func retrySave() {
+        guard canRetrySave else { return }
+        confirm()
+    }
+
+    /// A deliberate new opening starts over only after the previous profile was applied.
+    /// The archived session and the active detector profile remain saved.
+    func prepareForPresentation() {
+        guard stage == .complete, applied else { return }
+        session = nil; review = nil; recorder = nil; archiveURL = nil
+        cueTime = nil; responseEnded = false; progress = 0; prompt = ""
+        message = ""; saveError = nil; applied = false
+        stage = .idle
+    }
 
     func begin(context: CalibrationContext) {
         guard !blocksActions else { return }

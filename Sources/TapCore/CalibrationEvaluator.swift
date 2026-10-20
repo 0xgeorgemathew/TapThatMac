@@ -25,7 +25,7 @@ public enum CalibrationEvaluator {
               (DetectorSettings.minimumAmplitudeFloor...DetectorSettings.maximumAmplitudeFloor).contains(settings.amplitudeFloor),
               (0.5...20).contains(settings.minimumRiseRate),
               (1...30).contains(settings.impulseMinimumRiseRate),
-              (0.018...0.05).contains(settings.maximumPulseDuration),
+              (0.018...KnockPolicy.defaultMaximumPulseDuration).contains(settings.maximumPulseDuration),
               (0.3...0.8).contains(settings.maximumTapInterval) else {
             throw CalibrationError.invalidTrial
         }
@@ -65,7 +65,8 @@ public enum CalibrationEvaluator {
             (maximumDuration: 0.028, envelopeRise: 4.0, impulseRise: 8.0),
             (maximumDuration: 0.035, envelopeRise: 4.0, impulseRise: 8.0),
             (maximumDuration: 0.035, envelopeRise: 2.0, impulseRise: 5.0),
-            (maximumDuration: 0.035, envelopeRise: 1.0, impulseRise: 3.0)
+            (maximumDuration: 0.035, envelopeRise: 1.0, impulseRise: 3.0),
+            (maximumDuration: KnockPolicy.defaultMaximumPulseDuration, envelopeRise: 1.0, impulseRise: 3.0)
         ]
         let tapIntervals = [0.45, 0.55, 0.7]
         for floor in floors {

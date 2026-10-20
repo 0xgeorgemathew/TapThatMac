@@ -48,6 +48,7 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
     private(set) var isOpen = false
     var onDismiss: (() -> Void)?
     var onChoose: ((Command) -> Void)?
+    private var presentationSelection: ((Command) -> Void)?
 
     init(playSelectionSound: (() -> Void)? = nil) {
         if let playSelectionSound {
@@ -82,7 +83,7 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
         }
     }
 
-    func open(automaticAction: Bool = false) {
+    func open(automaticAction: Bool = false, onChoose selection: ((Command) -> Void)? = nil) {
         guard !isOpen else { return }
         retiringPanel?.orderOut(nil); retiringPanel = nil
         opening += 1; state.automaticAction = automaticAction
@@ -103,6 +104,7 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
         panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false
         panel.contentView = NSHostingView(rootView: RingView(state: state))
         panel.delegate = self; self.panel = panel; isOpen = true
+        presentationSelection = selection ?? onChoose
         if let monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown], handler: { [weak self] event in
             guard let self, self.isOpen else { return event }
             if event.type != .keyDown {
@@ -152,6 +154,8 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
         guard isOpen, state.committing == nil else { return }
         state.select(command)
         let token = opening
+        // Capture this presentation's dispatch context before dismissal clears it.
+        let selection = presentationSelection
         // Views own their local feedback animations; keep confirmation out of
         // the transaction that drives the moving selection surface.
         state.committing = command
@@ -161,7 +165,7 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) { [weak self] in
             guard let self, self.isOpen, self.opening == token else { return }
             self.dismiss()
-            self.onChoose?(command)
+            selection?(command)
         }
     }
 
@@ -170,6 +174,7 @@ final class RadialPanelController: NSObject, NSWindowDelegate {
         // Invalidate execution before the visual exit begins. The retiring
         // window cannot receive input or interfere with a newly opened ring.
         isOpen = false; opening += 1
+        presentationSelection = nil
         state.choose = nil
         monitors.forEach(NSEvent.removeMonitor); monitors.removeAll()
         let retiring = panel

@@ -22,7 +22,7 @@ struct NavDock: View {
                 }
 
                 HStack(spacing: 6) {
-                    Text("TapThatX")
+                    Text("Tap That Mac")
                     if let appVersion {
                         Text(appVersion)
                     }

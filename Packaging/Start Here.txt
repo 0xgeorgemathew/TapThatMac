@@ -1,24 +1,24 @@
-TapThatX — first launch
+Tap That Mac — first launch
 
-1. Drag TapThatX into Applications, then open it from there.
+1. Drag Tap That Mac into Applications, then open it from there.
 2. If macOS blocks it as an unidentified developer, open System Settings >
    Privacy & Security > Open Anyway and confirm.
 
 For a build received directly from someone you trust, you can instead run this
 in Terminal after copying the app:
 
-xattr -dr com.apple.quarantine "/Applications/TapThatX.app"
-open "/Applications/TapThatX.app"
+xattr -dr com.apple.quarantine "/Applications/Tap That Mac.app"
+open "/Applications/Tap That Mac.app"
 
 This removes only this app's download quarantine. It does not notarize the app,
 disable Gatekeeper globally, or grant Accessibility or Input Monitoring.
 
-3. TapThatX requests Accessibility and Input Monitoring at launch. The Live view
+3. Tap That Mac requests Accessibility and Input Monitoring at launch. The Live view
    explains missing access and opens the relevant System Settings pages. Enable
-   TapThatX manually in each list. Quit and reopen if macOS asks you to.
+   Tap That Mac manually in each list. Quit and reopen if macOS asks you to.
 4. Choose an operating mode: Active executes the configured action, Test shows
    recognized gestures without executing actions, and Paused stops recognition.
-   TapThatX uses 800 Hz for normal operation.
+   Tap That Mac uses 800 Hz for normal operation.
 
 Ad-hoc builds require direct sensor access. The authenticated helper needs an
 Apple-signed build. Same-model Macs can still differ in OS and access settings.

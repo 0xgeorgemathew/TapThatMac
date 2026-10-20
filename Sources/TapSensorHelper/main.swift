@@ -75,7 +75,7 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
 let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
 let appURL = executable.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 guard let bundle = Bundle(url: appURL),
-      let team = bundle.object(forInfoDictionaryKey: "TapThatXTeamIdentifier") as? String,
+      let team = bundle.object(forInfoDictionaryKey: "TapThatMacTeamIdentifier") as? String,
       let requirement = SensorIPC.requirement(identifier: SensorIPC.appIdentifier, team: team) else {
     fputs("Missing signed app team identifier; refusing sensor service.\n", stderr)
     exit(1)

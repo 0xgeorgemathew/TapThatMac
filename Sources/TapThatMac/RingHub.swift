@@ -31,7 +31,7 @@ struct CenterReadout: View {
                 .frame(width: 40, height: 32)
                 .accessibilityHidden(true)
 
-            Text(command?.rawValue ?? "TapThatX")
+            Text(command?.rawValue ?? "Tap That Mac")
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)

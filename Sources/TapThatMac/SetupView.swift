@@ -88,7 +88,10 @@ struct SetupView: View {
 
     @ViewBuilder private var pane: some View {
         switch selection ?? .live {
-        case .live:    TuningPane(model: model, openCalibration: { calibrationPresented = true })
+        case .live:    TuningPane(model: model, openCalibration: {
+            model.calibration.prepareForPresentation()
+            calibrationPresented = true
+        })
         case .actions: ActionsPane(model: model)
         }
     }

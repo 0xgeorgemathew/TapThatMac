@@ -1,5 +1,53 @@
 import Foundation
 
+/// Immutable onset measurement: later peaks cannot relax release confirmation.
+struct PulseReleaseCandidate {
+    let onset: Double
+    let initialMagnitude: Double
+    enum State { case pending, released, expired }
+
+    func state(feature: Double, at time: Double, maximumDuration: Double) -> State {
+        if time > onset + maximumDuration { return .expired }
+        return feature <= initialMagnitude * KnockPolicy.releaseRatio ? .released : .pending
+    }
+}
+
+/// Coalesce paths before spacing/burst accounting. Only spaced confirmations
+/// consume the rolling onset budget; suppressed contacts never extend ignore.
+struct ContactConfirmationGate {
+    private var lastCoalescedOnset = -Double.infinity
+    private var lastSpacedOnset = -Double.infinity
+    private var recentOnsets: [Double] = []
+    private var ignoreUntil = -Double.infinity
+    private(set) var rejectionTime = -Double.infinity
+    private(set) var rejectionReason = ""
+
+    mutating func reset() { self = Self() }
+
+    mutating func accept(onset: Double, confirmedAt time: Double) -> Bool {
+        guard onset >= ignoreUntil, time >= ignoreUntil else {
+            rejectionTime = time; rejectionReason = "rapid-contact ignore window"
+            return false
+        }
+        guard onset >= lastCoalescedOnset + KnockPolicy.pathCoalescingInterval else { return false }
+        guard onset >= lastSpacedOnset + KnockPolicy.minimumContactSpacing else {
+            rejectionTime = time; rejectionReason = "contacts less than 120 ms apart"
+            return false
+        }
+        lastCoalescedOnset = onset
+        lastSpacedOnset = onset
+        recentOnsets.removeAll { onset > $0 + KnockPolicy.burstWindow }
+        recentOnsets.append(onset)
+        guard recentOnsets.count < KnockPolicy.burstContactLimit else {
+            recentOnsets.removeAll()
+            ignoreUntil = time + KnockPolicy.burstIgnoreDuration
+            rejectionTime = time; rejectionReason = "four contacts within 500 ms"
+            return false
+        }
+        return true
+    }
+}
+
 private struct PulseDetector {
     private(set) var acceptedOnset = -Double.infinity
     private(set) var rejectionTime = -Double.infinity
@@ -15,11 +63,8 @@ private struct PulseDetector {
     private var baseline = 0.002
     private var latched = false
     private var lastImpact = -Double.infinity
-    private var candidateTime: Double?
-    var pendingOnset: Double? { candidateTime }
-    private var candidateThreshold = 0.0
-    private var candidatePeak = 0.0
-    private var candidateRiseRate = 0.0
+    private var candidate: PulseReleaseCandidate?
+    var pendingOnset: Double? { candidate?.onset }
     private var quietSince: Double?
 
     let impulseMode: Bool
@@ -69,21 +114,19 @@ private struct PulseDetector {
             if sample.time - quietSince! >= 0.005 { latched = false }
         } else { quietSince = nil }
 
-        if let onset = candidateTime {
-            candidatePeak = max(candidatePeak, feature)
-            if sample.time - onset > settings.maximumPulseDuration {
-                candidateTime = nil
+        if let pending = candidate {
+            switch pending.state(feature: feature, at: sample.time,
+                                 maximumDuration: settings.maximumPulseDuration) {
+            case .expired:
+                candidate = nil
                 rejectionTime = sample.time
                 rejectionReason = "pulse longer than \(Int(settings.maximumPulseDuration * 1_000)) ms"
-            } else if feature < max(candidateThreshold, candidateRiseRate >= 5 ? candidatePeak * 0.5 : 0) {
-                // A very sharp impact can have a long settling tail. Confirm its
-                // half-height decay, independent of the user's amplitude floor.
-                // Slower onsets still need the original full threshold crossing:
-                // half-height alone does not establish that motion was an impact.
-                candidateTime = nil
-                if settings.suppressTyping, let key = lastKeyTime, sample.time - key < 0.18 { return false }
-                acceptedOnset = onset
+            case .released:
+                candidate = nil
+                if settings.suppressTyping, KnockPolicy.typingBlocks(at: sample.time, lastKeyTime: lastKeyTime) { return false }
+                acceptedOnset = pending.onset
                 return true
+            case .pending: break
             }
         }
         // A light pulse can end before the short average reaches contrast.
@@ -102,11 +145,11 @@ private struct PulseDetector {
             rejectionTime = sample.time; rejectionReason = "onset too slow"
             return false
         }
-        if settings.suppressTyping, let key = lastKeyTime, sample.time - key < 0.18 { return false }
+        if settings.suppressTyping, KnockPolicy.typingBlocks(at: sample.time, lastKeyTime: lastKeyTime) { return false }
         // Rejected slow crossings must not disarm a sharper contact that follows
         // while the computer is still moving. Only a candidate starts rearming.
         latched = true; lastImpact = sample.time
-        candidateTime = sample.time; candidateThreshold = threshold; candidatePeak = feature; candidateRiseRate = riseRate
+        candidate = PulseReleaseCandidate(onset: sample.time, initialMagnitude: feature)
         return false
     }
 }
@@ -118,11 +161,16 @@ public struct KnockDetector {
     public var settings = DetectorSettings()
     private var envelope = PulseDetector()
     private var impulse = PulseDetector(impulseMode: true)
+    private var confirmationGate = ContactConfirmationGate()
+    private var lastSampleTime: Double?
     public private(set) var acceptedOnset = -Double.infinity
     public private(set) var acceptedPath = ""
-    public var lastRejectionTime: Double { max(envelope.rejectionTime, impulse.rejectionTime) }
+    public var lastRejectionTime: Double { max(confirmationGate.rejectionTime, max(envelope.rejectionTime, impulse.rejectionTime)) }
     public var lastRejectionReason: String {
-        impulse.rejectionTime > envelope.rejectionTime
+        if confirmationGate.rejectionTime >= max(envelope.rejectionTime, impulse.rejectionTime) {
+            return confirmationGate.rejectionReason
+        }
+        return impulse.rejectionTime > envelope.rejectionTime
             ? "impulse: " + impulse.rejectionReason : "envelope: " + envelope.rejectionReason
     }
     public var feature: Double { envelope.feature }
@@ -136,9 +184,16 @@ public struct KnockDetector {
     public var warmingUp: Bool { envelope.warmingUp }
     public init() {}
     public mutating func reset() {
-        envelope.reset(); impulse.reset(); acceptedOnset = -Double.infinity; acceptedPath = ""
+        envelope.reset(); impulse.reset(); confirmationGate.reset()
+        lastSampleTime = nil; acceptedOnset = -Double.infinity; acceptedPath = ""
     }
     public mutating func ingest(_ sample: AccelerationSample, lastKeyTime: Double?, maximumSampleGap: Double = 0.5) -> Bool {
+        guard sample.time.isFinite, sample.x.isFinite, sample.y.isFinite, sample.z.isFinite else { return false }
+        if let previous = lastSampleTime {
+            guard sample.time > previous else { return false }
+            if sample.time - previous > max(0.5, maximumSampleGap) { reset() }
+        }
+        lastSampleTime = sample.time
         envelope.settings = settings
         let knock = envelope.ingest(sample, lastKeyTime: lastKeyTime, maximumSampleGap: maximumSampleGap)
         var light = false
@@ -149,11 +204,7 @@ public struct KnockDetector {
         guard knock || light else { return false }
         let onset = min(knock ? envelope.acceptedOnset : .infinity,
                         light ? impulse.acceptedOnset : .infinity)
-        // Real Mac chassis traces contain a second ring 90–105 ms after one
-        // finger contact. It is neither a new tap nor useful pair input.
-        // Leave a small margin beyond those echoes without swallowing deliberate
-        // 120–130 ms pairs. Pulse shape and quiet rearming still apply per path.
-        guard onset - acceptedOnset >= 0.11 else { return false }
+        guard confirmationGate.accept(onset: onset, confirmedAt: sample.time) else { return false }
         acceptedOnset = onset
         acceptedPath = light ? "impulse" : "envelope"
         return true

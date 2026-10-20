@@ -55,18 +55,20 @@ final class AppModel: ObservableObject {
     var paused: Bool { operatingMode == .paused }
     @Published var sensitivity = 2.0 {
         didSet {
-            UserDefaults.standard.set(sensitivity, forKey: "knockSensitivity")
+            guard !isRestoringSettings else { return }
+            settingsDefaults.set(sensitivity, forKey: "knockSensitivity")
             detector.settings.sensitivity = sensitivity
             if !applyingProfile {
                 activeCalibrationProfile = nil
-                UserDefaults.standard.removeObject(forKey: "activeCalibrationProfileID")
-                UserDefaults.standard.removeObject(forKey: "calibrationSessionID")
+                settingsDefaults.removeObject(forKey: "activeCalibrationProfileID")
+                settingsDefaults.removeObject(forKey: "calibrationSessionID")
             }
             persistDetectorSettings()
             resetInteraction(); logSettings()
         }
     }
     @Published var suppressTyping = true { didSet {
+        guard !isRestoringSettings else { return }
         detector.settings.suppressTyping = suppressTyping
         persistDetectorSettings(); resetInteraction(); logSettings()
     } }
@@ -95,6 +97,9 @@ final class AppModel: ObservableObject {
     private let toast = AcknowledgmentController()
     private var detector = KnockDetector()
     private var applyingProfile = false
+    // Published observers run during init after all stored properties exist.
+    // Restore the complete detector and profile before enabling edit side effects.
+    private var isRestoringSettings = true
     private var router = GestureRouter()
     private var lastKeyTime: Double?
     private var timer: Timer?
@@ -143,8 +148,10 @@ final class AppModel: ObservableObject {
     private var awaitingLock = false
     private var showLockReceiptOnReturn = false
     private var lockAttempt = 0
+    private let settingsDefaults: UserDefaults
     private let modeDefaults: UserDefaults
     private let servicesEnabled: Bool
+    private let commandExecution: ((Command, Bool) -> String)?
     private var now: Double { ProcessInfo.processInfo.systemUptime }
     var actionBlockReason: String? {
         if legacyCalibrationMode { return "Legacy calibration mode: system actions are off" }
@@ -160,7 +167,7 @@ final class AppModel: ObservableObject {
     var calibrationUnavailableReason: String? {
         if input == .simulated { return "Calibration requires the connected sensor." }
         if paused || !inactiveReasons.isEmpty { return "Resume the sensor in an active session." }
-        if !setupIsVisible { return "Keep TapThatX visible during calibration." }
+        if !setupIsVisible { return "Keep Tap That Mac visible during calibration." }
         if status != "Streaming accelerometer" { return "Connect the sensor before recording." }
         if sampleRate != 800 { return "Calibration requires the normal 800 Hz sensor rate." }
         if rate < 700 || rate > 900 { return "Waiting for a steady sensor stream near 800 Hz." }
@@ -210,8 +217,8 @@ final class AppModel: ObservableObject {
         calibrationProfiles.insert(profile, at: 0)
         activeCalibrationProfile = profile
         persistCalibrationProfiles()
-        UserDefaults.standard.set(profile.id.uuidString, forKey: "activeCalibrationProfileID")
-        UserDefaults.standard.set(profile.id.uuidString, forKey: "calibrationSessionID")
+        settingsDefaults.set(profile.id.uuidString, forKey: "activeCalibrationProfileID")
+        settingsDefaults.set(profile.id.uuidString, forKey: "calibrationSessionID")
         calibration.markApplied()
         acknowledgment = "Your personal tap profile is active."
         diagnostics.log("calibration", "Applied session \(session.id); floor=\(settings.amplitudeFloor); rise=\(settings.minimumRiseRate)/\(settings.impulseMinimumRiseRate); duration=\(settings.maximumPulseDuration); pair=\(settings.maximumTapInterval)")
@@ -228,20 +235,24 @@ final class AppModel: ObservableObject {
         applyingProfile = false
         activeCalibrationProfile = profile
         persistDetectorSettings()
-        UserDefaults.standard.set(id.uuidString, forKey: "activeCalibrationProfileID")
+        settingsDefaults.set(id.uuidString, forKey: "activeCalibrationProfileID")
         acknowledgment = "\(profile.name) profile applied"
     }
 
     func keepCurrentSettingsWithoutProfile() {
         activeCalibrationProfile = nil
-        UserDefaults.standard.removeObject(forKey: "activeCalibrationProfileID")
-        UserDefaults.standard.removeObject(forKey: "calibrationSessionID")
+        settingsDefaults.removeObject(forKey: "activeCalibrationProfileID")
+        settingsDefaults.removeObject(forKey: "calibrationSessionID")
         acknowledgment = "Current detector settings kept without a tap profile"
     }
 
     init(startServices: Bool = true, calibration: CalibrationController = CalibrationController(),
-         modeDefaults: UserDefaults = .standard) {
+         modeDefaults: UserDefaults = .standard,
+         settingsDefaults: UserDefaults = .standard,
+         commandExecution: ((Command, Bool) -> String)? = nil) {
+        self.settingsDefaults = settingsDefaults
         self.modeDefaults = modeDefaults
+        self.commandExecution = commandExecution
         servicesEnabled = startServices
         operatingMode = OperatingModeMigration.restore(
             savedMode: modeDefaults.string(forKey: "operatingMode"),
@@ -250,10 +261,10 @@ final class AppModel: ObservableObject {
         )
         self.calibration = calibration
         calibrationObservation = calibration.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
-        let storedSettings = Self.loadDetectorSettings()
+        let storedSettings = loadDetectorSettings()
         var savedSettings = storedSettings ?? DetectorSettings()
         if storedSettings == nil {
-            let savedSensitivity = UserDefaults.standard.object(forKey: "knockSensitivity") as? Double ?? 2.0
+            let savedSensitivity = settingsDefaults.object(forKey: "knockSensitivity") as? Double ?? 2.0
             savedSettings.sensitivity = savedSensitivity.isFinite
                 ? min(DetectorSettings.maximumSensitivity,
                       max(DetectorSettings.minimumSensitivity, savedSensitivity)) : 2.0
@@ -262,11 +273,12 @@ final class AppModel: ObservableObject {
         suppressTyping = savedSettings.suppressTyping
         detector.settings = savedSettings
         router = GestureRouter(maximumInterval: savedSettings.maximumTapInterval)
-        calibrationProfiles = Self.loadCalibrationProfiles()
-        if let rawID = UserDefaults.standard.string(forKey: "activeCalibrationProfileID"),
+        calibrationProfiles = loadCalibrationProfiles()
+        if let rawID = settingsDefaults.string(forKey: "activeCalibrationProfileID"),
            let id = UUID(uuidString: rawID) {
             activeCalibrationProfile = calibrationProfiles.first { $0.id == id }
         }
+        isRestoringSettings = false
         ring.onChoose = { [weak self] in self?.execute($0) }
         ring.onDismiss = { [weak self] in
             self?.ringPreviewActive = false
@@ -310,18 +322,18 @@ final class AppModel: ObservableObject {
     }
     private func persistDetectorSettings() {
         guard let data = try? JSONEncoder().encode(detector.settings) else { return }
-        UserDefaults.standard.set(data, forKey: "detectorSettings")
+        settingsDefaults.set(data, forKey: "detectorSettings")
     }
-    private static func loadDetectorSettings() -> DetectorSettings? {
-        guard let data = UserDefaults.standard.data(forKey: "detectorSettings") else { return nil }
+    private func loadDetectorSettings() -> DetectorSettings? {
+        guard let data = settingsDefaults.data(forKey: "detectorSettings") else { return nil }
         return try? JSONDecoder().decode(DetectorSettings.self, from: data)
     }
     private func persistCalibrationProfiles() {
         guard let data = try? JSONEncoder().encode(calibrationProfiles) else { return }
-        UserDefaults.standard.set(data, forKey: "calibrationProfiles")
+        settingsDefaults.set(data, forKey: "calibrationProfiles")
     }
-    private static func loadCalibrationProfiles() -> [CalibrationProfile] {
-        guard let data = UserDefaults.standard.data(forKey: "calibrationProfiles"),
+    private func loadCalibrationProfiles() -> [CalibrationProfile] {
+        guard let data = settingsDefaults.data(forKey: "calibrationProfiles"),
               let profiles = try? JSONDecoder().decode([CalibrationProfile].self, from: data) else { return [] }
         return profiles
     }
@@ -369,7 +381,7 @@ final class AppModel: ObservableObject {
         waitingForHelperApproval = HelperClient.service.status == .requiresApproval
         input = .helper
         if waitingForHelperApproval {
-            acknowledgment = "Approve the TapThatX sensor helper in Login Items to enable hardware double-taps"
+            acknowledgment = "Approve the Tap That Mac sensor helper in Login Items to enable hardware double-taps"
             SMAppService.openSystemSettingsLoginItems()
         }
     }
@@ -423,7 +435,7 @@ final class AppModel: ObservableObject {
         if wasInactive != !inactiveReasons.isEmpty { restart() }
         if inactiveReasons.isEmpty, showLockReceiptOnReturn {
             showLockReceiptOnReturn = false
-            acknowledgment = "Mac locked by TapThatX"
+            acknowledgment = "Mac locked by Tap That Mac"
             toast.show(acknowledgment)
         }
     }
@@ -528,11 +540,15 @@ final class AppModel: ObservableObject {
             router.consumeOpening(at: time)
         }
     }
-    private func execute(_ command: Command) {
-        let allowed = ActionAvailability.canExecute(preview: ringPreviewActive, blockReason: actionBlockReason)
-        if ringPreviewActive {
+    private func execute(_ command: Command, preview: Bool = false) {
+        let allowed = ActionAvailability.canExecute(preview: preview, blockReason: actionBlockReason)
+        if preview {
             acknowledgment = "Preview only · \(command.rawValue) was not run"
             toast.show(acknowledgment)
+            return
+        }
+        if let commandExecution {
+            acknowledgment = commandExecution(command, allowed)
             return
         }
         if let intent = command.assistantIntent {
@@ -570,7 +586,9 @@ final class AppModel: ObservableObject {
         guard !ring.isOpen else { return }
         resetInteraction(resetDetector: false)
         ringPreviewActive = true
-        ring.open()
+        ring.open(onChoose: { [weak self] command in
+            self?.execute(command, preview: true)
+        })
         guard ring.isOpen else { ringPreviewActive = false; return }
         router.consumeOpening(at: now)
     }
@@ -618,7 +636,7 @@ final class AppModel: ObservableObject {
         let ready = pendingImpacts.filter { time - $0 >= 0.04 }
         pendingImpacts.removeAll { time - $0 >= 0.04 }
         for impact in ready {
-            if !suppressTyping || lastKeyTime.map({ abs(impact - $0) > 0.18 }) != false { knock(at: impact) }
+            if !suppressTyping || !KnockPolicy.typingBlocks(at: impact, lastKeyTime: lastKeyTime) { knock(at: impact) }
         }
         // Expire using processed sensor time. Wall time can run ahead of a second
         // tap that is still awaiting pulse confirmation in the sensor batch.
@@ -663,7 +681,7 @@ final class AppModel: ObservableObject {
             "events": diagnostics.events.suffix(12).map { "\($0.kind): \($0.detail)" }
         ]
         do {
-            let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("TapThatX")
+            let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("Tap That Mac")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let data = try JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys])
             try data.write(to: directory.appendingPathComponent("runtime-status.json"), options: .atomic)
@@ -671,7 +689,7 @@ final class AppModel: ObservableObject {
     }
 
     func installHelper() {
-        guard let team = Bundle.main.object(forInfoDictionaryKey: "TapThatXTeamIdentifier") as? String,
+        guard let team = Bundle.main.object(forInfoDictionaryKey: "TapThatMacTeamIdentifier") as? String,
               SensorIPC.requirement(identifier: SensorIPC.appIdentifier, team: team) != nil else {
             helperStatus = "Build with an Apple signing identity and TEAM_ID before registering the helper"
             return
