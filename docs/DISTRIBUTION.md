@@ -31,3 +31,14 @@ Use `SIGNING_IDENTITY=- bash scripts/build-app.sh`, then `bash scripts/create-dm
 Tap That Mac uses `com.tapthatmac.app` and the `com.tapthatmac.sensor` helper. macOS may require fresh Accessibility, Input Monitoring and Login Items approval. Before removing the previous app, use its Remove Helper control to unregister its daemon; the renamed app does not remove the old registered helper automatically.
 
 At launch, missing preferences are copied once from the legacy `com.tapthatx.app` domain. Existing new preferences take priority, including later cleared choices. Missing files from `~/Library/Application Support/TapThatX/` are copied into `~/Library/Application Support/Tap That Mac/`; originals and existing destination files are retained. New calibration and runtime files use the new folder. File-copy failures are logged and retried on the next launch.
+
+## Publishing a release
+
+`install.sh` installs the newest GitHub release, betas included. It looks for an asset named `TapThatMac-<version>.zip` containing `Tap That Mac.app`, verifies it against `TapThatMac-<version>.zip.sha256`, clears the download quarantine and installs to `/Applications`.
+
+```sh
+bash scripts/release.sh 0.1.0-beta.1
+gh release create v0.1.0-beta.1 dist/release/* --prerelease --title 'Tap That Mac 0.1.0-beta.1' --notes-file notes.md
+```
+
+The version must start with `CFBundleShortVersionString` from `Packaging/Info.plist`; bump `CFBundleVersion` for every release. The script refuses ad-hoc builds. Sign every release with the same identity, or macOS asks users to approve Accessibility and Input Monitoring again. Releases are signed but not notarized until a Developer ID certificate is configured; the installer and the DMG's `Start Here.txt` explain the first launch.

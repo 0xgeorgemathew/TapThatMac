@@ -9,6 +9,8 @@
 
 # Generated reports and research artifacts
 /artifacts/
+/scratch/
+/docs/research/knock-*
 .env
 .env.*
 *.p12
