@@ -145,7 +145,7 @@ Tap That Mac is a beta and hasn't been tried on many Macs yet. Some MacBooks may
 
 ## Build from source
 
-Requires Xcode 16 or newer (Swift 6 toolchain; the package uses Swift 5 language mode).
+Requires Xcode 26 or newer: the app uses the macOS 26 SDK for Liquid Glass and falls back to older materials on macOS 14 and 15. The package uses Swift 5 language mode.
 
 ```sh
 swift build && swift test         # build and run the test suites

@@ -294,8 +294,8 @@ def terminal(work):
     rows = [
         ("c", "✓", "Checked this Mac", "macOS 27.0.1 · Apple M3 Pro"),
         ("c", "✓", "Found the motion sensor", "built-in accelerometer"),
-        ("c", "✓", "Found Tap That Mac 0.1.0-beta.1", "released Oct 20 · 3.1 MB"),
-        ("c", "✓", "Downloaded", "3.1 MB"),
+        ("c", "✓", "Found Tap That Mac 0.1.0-beta.1", "released Oct 20 · 3.5 MB"),
+        ("c", "✓", "Downloaded", "3.5 MB"),
         ("c", "✓", "Verified the download", "SHA-256 matches"),
         ("c", "✓", "Installed", "/Applications/Tap That Mac.app"),
         ("c", "✓", "Opened Tap That Mac", ""),
