@@ -103,9 +103,12 @@ final class MaterialContainerView: NSView {
     /// stays static and is not promised interactive deformation.
     func setInteractive(_ interactive: Bool) {
         guard #available(macOS 26.0, *), let glass = backing as? NSGlassEffectView else { return }
+        // effectIsInteractive is in the macOS 27 SDK (Swift 6.4); older SDKs build without it.
+        #if compiler(>=6.4)
         if #available(macOS 27.0, *) {
             glass.effectIsInteractive = interactive
         }
+        #endif
     }
 
 }
