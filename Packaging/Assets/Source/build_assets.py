@@ -6,33 +6,19 @@ from PIL import Image, ImageDraw, ImageFilter, ImageEnhance, ImageChops
 root = Path(__file__).resolve().parents[3]
 src = root / "Packaging/Assets/Source"
 
-# ── App icon: macOS template, 824px squircle tile inside a 1024 canvas, soft drop shadow ──
-def squircle_mask(size, n=5.0, ss=4):
-    big = size * ss
-    m = Image.new("L", (big, big), 0)
-    px = m.load()
-    r = big / 2
-    for y in range(big):
-        dy = abs((y + .5 - r) / r) ** n
-        if dy >= 1: continue
-        dx = (1 - dy) ** (1 / n) * r
-        for x in range(int(r - dx), int(r + dx)):
-            px[x, y] = 255
-    return m.resize((size, size), Image.LANCZOS)
-
+# ── App icon: macOS template, 824px squircle tile inside a 1024 canvas ──
+# No drop shadow: macOS draws its own, and anything outside the tile makes
+# macOS 26+ shrink the icon onto a grey plate.
 art = Image.open(src / "icon.png").convert("RGB")
 tile_size, canvas = 824, 1024
 off = (canvas - tile_size) // 2
 z = 1.0  # the artwork is composed edge to edge
 c = round(1024 / z); o = (1024 - c) // 2
 tile = art.crop((o, o, o + c, o + c)).resize((tile_size, tile_size), Image.LANCZOS)
-mask = squircle_mask(tile_size)
+# Apple's tile outline, taken from a system-conforming icon. A hand-made
+# superellipse differs enough that macOS 26+ treats the icon as legacy.
+mask = Image.open(src / "tile-mask.png").convert("L")
 icon = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
-shadow = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
-sh = Image.new("L", (canvas, canvas), 0); sh.paste(mask, (off, off + 12))
-sh = sh.filter(ImageFilter.GaussianBlur(14)).point(lambda v: int(v * .45))
-shadow.putalpha(sh)
-icon = Image.alpha_composite(icon, shadow)
 t = tile.convert("RGBA"); t.putalpha(mask)
 # faint top-edge highlight, as on system icons
 inner = mask.filter(ImageFilter.GaussianBlur(1.5))
